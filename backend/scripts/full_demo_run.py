@@ -10,7 +10,7 @@ from typing import Dict, Any
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlmodel import SQLModel, Session, select
+from sqlmodel import SQLModel, Session, select, text
 from app.db import engine
 from app.models import RecoveryCase, GuardrailEvent, RecoveryAction, GuardrailDecision
 from app.routers.ingestion import ingest_all_synthetic_data
@@ -105,7 +105,8 @@ def run_full_demo(seed: int = 42):
     }
 
     # 4. Process all cases synchronously through full pipeline
-    print("\n[Step 4/5] Processing all detected cases (Classify -> Guardrails -> Simulator)...")
+    max_live_ai_calls = 5
+    print(f"\n[Step 4/5] Processing all detected cases (First {max_live_ai_calls} live Cerebras AI calls -> Bulk deterministic run -> Guardrails -> Simulator)...")
 
     gt_correct = 0
     gt_total = 0
@@ -126,8 +127,9 @@ def run_full_demo(seed: int = 42):
                 "status": case.status.value if hasattr(case.status, 'value') else str(case.status)
             }
 
-            # Step 4a: Classify
-            ai_decision = classify_case(payload)
+            # Step 4a: Classify (Live Cerebras AI for first N cases, deterministic fallback for remaining bulk run)
+            use_fallback = (idx > max_live_ai_calls)
+            ai_decision = classify_case(payload, force_fallback=use_fallback)
             rec_action = ai_decision.get("recommended_action", "SEND_REMINDER")
 
             # Evaluate ground truth match per category
@@ -196,6 +198,32 @@ def run_full_demo(seed: int = 42):
     print(f"   +- ESCALATE Route:        {escalate_blocks}")
     print(f" Total Human Escalations:    {metrics['human_escalations']}")
     print("=" * 80 + "\n")
+
+    # 6. Execute Hand SQL Reconciliation Queries against raw DB tables
+    print("=" * 80)
+    print("      DATABASE RECONCILIATION VERIFICATION (RAW SQL VS API METRICS)")
+    print("=" * 80)
+    with Session(engine) as session:
+        sql_approved = session.exec(text("SELECT COUNT(*) FROM guardrailevent WHERE decision='APPROVED'")).one()[0]
+        sql_blocked = session.exec(text("SELECT COUNT(*) FROM guardrailevent WHERE decision='BLOCKED'")).one()[0]
+        sql_action_count = session.exec(text("SELECT COUNT(*) FROM recoveryaction")).one()[0]
+        sql_recovered_sum = session.exec(text("SELECT SUM(amount_at_risk) FROM recoverycase WHERE status='RECOVERED'")).one()[0] or 0.0
+
+        print(f" Query 1: Approved Guardrail Events (SQL)   : {sql_approved:>6} (Expected: {approved_count})")
+        print(f" Query 2: Blocked Guardrail Events (SQL)    : {sql_blocked:>6} (Expected: {total_blocked})")
+        print(f" Query 3: Total Guardrail Events (A + B)    : {sql_approved + sql_blocked:>6} (Expected: {len(all_cases)})")
+        print(f" Query 4: Total Recovery Actions (SQL)      : {sql_action_count:>6} (Expected: {approved_count})")
+        print(f" Query 5: Sum Recovered Amount (SQL)        : ${sql_recovered_sum:>10,.2f} (Expected: ${total_recovered:,.2f})")
+        print("-" * 80)
+
+        # Assert zero divergence between SQL DB truth and reported metrics
+        assert sql_approved == approved_count, f"Approved count mismatch: SQL {sql_approved} != Reported {approved_count}"
+        assert sql_blocked == total_blocked, f"Blocked count mismatch: SQL {sql_blocked} != Reported {total_blocked}"
+        assert sql_approved + sql_blocked == len(all_cases), "Sum of approved + blocked does not equal total cases!"
+        assert sql_action_count == approved_count, f"Action count mismatch: SQL {sql_action_count} != Reported {approved_count}"
+        assert round(sql_recovered_sum, 2) == round(total_recovered, 2), f"Recovered sum mismatch: SQL {sql_recovered_sum} != Reported {total_recovered}"
+        print(" RECONCILIATION STATUS: 100% MATCH (ZERO DB DIVERGENCE PASSED!)")
+        print("=" * 80 + "\n")
 
     sys.stdout = tee.terminal
     tee.log_file.close()

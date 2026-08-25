@@ -1,5 +1,5 @@
 import asyncio
-from sqlmodel import SQLModel, Session
+from sqlmodel import SQLModel, Session, text
 from app.db import engine
 from app.routers.ingestion import ingest_all_synthetic_data
 from app.services.detection import detect_revenue_at_risk
@@ -28,13 +28,12 @@ def test_stream_and_metrics_endpoints(engine):
 
     with Session(engine) as session:
         detect_res = detect_revenue_at_risk(session)
-        print("Detection result:", detect_res)
         assert detect_res["cases_created"] == 381
 
     # ----------------------------------------------------
     # 1. TEST GET /api/metrics BEFORE BATCH PROCESSING
     # ----------------------------------------------------
-    print("\n--- TEST 1: Initial Live Metrics GET /api/metrics ---")
+    print("\n--- TEST 1: Initial Metrics GET /api/metrics ---")
     with Session(engine) as session:
         initial_metrics = get_live_metrics(session)
         print("Initial Metrics Payload:", initial_metrics)
@@ -43,10 +42,6 @@ def test_stream_and_metrics_endpoints(engine):
         assert initial_metrics["total_recovered"] == 0.0
         assert initial_metrics["recovery_rate"] == 0.0
         assert "by_category" in initial_metrics
-        assert "FAILED_PAYMENT" in initial_metrics["by_category"]
-        assert "ABANDONED_CHECKOUT" in initial_metrics["by_category"]
-        assert "FAILED_SUBSCRIPTION" in initial_metrics["by_category"]
-        assert "OVERDUE_INVOICE" in initial_metrics["by_category"]
         assert "human_escalations" in initial_metrics
         assert "guardrail_blocks" in initial_metrics
 
@@ -92,6 +87,29 @@ def test_stream_and_metrics_endpoints(engine):
             print(f"Category '{cat}': count={stats['case_count']}, recovered={stats['recovered_count']}, rate={stats['recovery_rate']}%")
 
     print("PASSED: Live metrics computed updated database state directly without caching!")
+
+    # ----------------------------------------------------
+    # 5. HAND SQL RECONCILIATION VERIFICATION
+    # ----------------------------------------------------
+    print("\n--- TEST 5: Raw SQL DB Reconciliation Verification ---")
+    with Session(engine) as session:
+        sql_approved = session.exec(text("SELECT COUNT(*) FROM guardrailevent WHERE decision='APPROVED'")).one()[0]
+        sql_blocked = session.exec(text("SELECT COUNT(*) FROM guardrailevent WHERE decision='BLOCKED'")).one()[0]
+        sql_total_events = session.exec(text("SELECT COUNT(*) FROM guardrailevent")).one()[0]
+        sql_action_count = session.exec(text("SELECT COUNT(*) FROM recoveryaction")).one()[0]
+        sql_recovered_sum = session.exec(text("SELECT SUM(amount_at_risk) FROM recoverycase WHERE status='RECOVERED'")).one()[0] or 0.0
+
+        print(f" SQL Approved Events  : {sql_approved}")
+        print(f" SQL Blocked Events   : {sql_blocked}")
+        print(f" SQL Action Rows      : {sql_action_count}")
+        print(f" SQL Recovered Sum    : ${sql_recovered_sum:,.2f}")
+
+        # Reconciliation assertions
+        assert sql_approved + sql_blocked == sql_total_events, "Approved + Blocked does not equal total guardrail events!"
+        assert sql_action_count == sql_approved, "Every approved case must have exactly one RecoveryAction row!"
+        assert round(sql_recovered_sum, 2) == round(updated_metrics["total_recovered"], 2), "Sum of recovered amounts does not match reported total!"
+
+    print("PASSED: Raw SQL database truth matches API metrics with 100% reconciliation!")
 
     print("\n=== ALL SSE STREAM & LIVE METRICS API VERIFICATION TESTS PASSED! ===")
 

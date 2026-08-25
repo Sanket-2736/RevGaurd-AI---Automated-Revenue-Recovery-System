@@ -156,12 +156,12 @@ def _fallback_classify_case(case: dict) -> Dict[str, Any]:
         "requires_human_approval": requires_human_approval
     }
 
-def classify_case(case: dict) -> Dict[str, Any]:
+def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
     Synchronously classifies an at-risk case using Cerebras client (gpt-oss-120b) with tool calling.
+    If force_fallback is True, uses deterministic fallback classifier directly for high-throughput bulk runs.
     """
-    if not _is_api_key_valid() or Cerebras is None:
-        logger.info("Using fallback heuristic classification (Cerebras API key not set or Cerebras SDK missing)")
+    if force_fallback or not _is_api_key_valid() or Cerebras is None:
         return _fallback_classify_case(case)
 
     try:
