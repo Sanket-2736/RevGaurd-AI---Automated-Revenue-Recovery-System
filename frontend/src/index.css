@@ -1,3 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import 'driver.js/dist/driver.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #090D16;
+    color: #F3F4F6;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  }
+
+  .font-mono-num {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+}
+
+/* Glassmorphism & Elevation Classes */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(22, 32, 50, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+/* Glowing Accent Borders */
+.glow-emerald {
+  border-color: rgba(16, 185, 129, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(16, 185, 129, 0.15);
+}
+
+.glow-amber {
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.15);
+}
+
+.glow-indigo {
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.15);
+}
+
+.glow-rose {
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: 0 10px 30px -5px rgba(239, 68, 68, 0.15);
+}
+
+/* Pulse animation for active stream */
+@keyframes pulse-ring {
+  0% { transform: scale(0.97); opacity: 0.85; }
+  50% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(0.97); opacity: 0.85; }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s infinite ease-in-out;
+}
+
+/* Driver.js Dark Theme Overrides */
+.driver-popover {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(99, 102, 241, 0.5) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 30px rgba(99, 102, 241, 0.25) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+  padding: 1.25rem !important;
+}
+
+.driver-popover-title {
+  color: #A5B4FC !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+}
+
+.driver-popover-description {
+  color: #E2E8F0 !important;
+  font-size: 0.9rem !important;
+  line-height: 1.6 !important;
+  margin-top: 0.5rem !important;
+}
+
+.driver-popover-footer button {
+  background-color: #4F46E5 !important;
+  color: #FFFFFF !important;
+  border-radius: 0.5rem !important;
+  border: none !important;
+  font-weight: 700 !important;
+  font-size: 0.8rem !important;
+  padding: 0.5rem 1rem !important;
+}
+
+.driver-popover-footer button:hover {
+  background-color: #6366F1 !important;
+}

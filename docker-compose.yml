@@ -53,21 +53,6 @@ services:
     networks:
       - revenue_net
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: revenue_recovery_frontend
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    depends_on:
-      - backend
-    networks:
-      - revenue_net
-
   worker:
     build:
       context: ./backend

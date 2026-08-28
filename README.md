@@ -68,16 +68,23 @@ The **AI Revenue Recovery Agent** dynamically evaluates at-risk revenue cases in
 
 ## ⚡ One-Command Quickstart Setup
 
-Clone the repository and spin up all monorepo microservices (Postgres, Redis, Backend FastAPI API, Worker, and React Frontend) using Docker Compose:
+Clone the repository and spin up the backend service stack (Postgres, Redis, Backend FastAPI API, and Worker) using Docker Compose:
 
 ```bash
 docker compose up --build
 ```
 
 Access the interfaces once containers are active:
-- **React Frontend Dashboard**: [http://localhost:3000](http://localhost:3000)
 - **FastAPI OpenAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Backend Metrics Endpoint**: [http://localhost:8000/api/metrics](http://localhost:8000/api/metrics)
+
+To run the React Frontend Dashboard locally:
+```bash
+cd frontend
+npm run dev
+```
+Access the dashboard at **[http://localhost:5173](http://localhost:5173)**.
+
 
 ---
 

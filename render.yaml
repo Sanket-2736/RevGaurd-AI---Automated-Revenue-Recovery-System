@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: revenue-recovery-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: CEREBRAS_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: revenue-recovery-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: revenue-recovery-redis
+          property: connectionString
+
+  - type: redis
+    name: revenue-recovery-redis
+    ipAllowList: [] # internal only
+
+databases:
+  - name: revenue-recovery-db
+    databaseName: revenue_recovery
+    user: postgres

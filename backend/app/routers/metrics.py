@@ -94,3 +94,80 @@ def get_live_metrics(session: Session = Depends(get_session)) -> Dict[str, Any]:
         "human_escalations": human_escalations,
         "guardrail_blocks": guardrail_blocks
     }
+
+@router.get("/cases")
+def get_all_cases(
+    limit: int = 100,
+    status: str = None,
+    session: Session = Depends(get_session)
+):
+    """
+    Returns list of recovery cases with customer metadata.
+    """
+    from app.models import Customer
+    query = select(RecoveryCase, Customer).join(Customer, RecoveryCase.customer_id == Customer.id)
+    if status:
+        query = query.where(RecoveryCase.status == status)
+    query = query.order_by(RecoveryCase.id.desc()).limit(limit)
+    results = session.exec(query).all()
+
+    cases_out = []
+    for case, customer in results:
+        cases_out.append({
+            "id": case.id,
+            "case_type": case.case_type.value if hasattr(case.case_type, "value") else str(case.case_type),
+            "status": case.status.value if hasattr(case.status, "value") else str(case.status),
+            "amount_at_risk": case.amount_at_risk,
+            "root_cause": case.root_cause,
+            "recommended_action": case.recommended_action,
+            "ai_confidence": case.ai_confidence,
+            "customer_name": customer.name,
+            "customer_email": customer.email,
+            "created_at": case.created_at.isoformat() if case.created_at else None,
+            "resolved_at": case.resolved_at.isoformat() if case.resolved_at else None
+        })
+    return cases_out
+
+@router.get("/events")
+def get_guardrail_events(
+    limit: int = 100,
+    session: Session = Depends(get_session)
+):
+    """
+    Returns list of GuardrailEvent audit records.
+    """
+    events = session.exec(
+        select(GuardrailEvent)
+        .order_by(GuardrailEvent.id.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        {
+            "id": ge.id,
+            "case_id": ge.case_id,
+            "rule_triggered": ge.rule_triggered,
+            "decision": ge.decision.value if hasattr(ge.decision, "value") else str(ge.decision),
+            "reason": ge.reason,
+            "created_at": ge.created_at.isoformat() if ge.created_at else None
+        }
+        for ge in events
+    ]
+
+@router.post("/reset")
+def reset_demo_state(session: Session = Depends(get_session)):
+    """
+    Resets demo state by re-ingesting synthetic datasets and re-running detection.
+    """
+    from app.routers.ingestion import ingest_all_synthetic_data
+    from app.services.detection import detect_revenue_at_risk
+
+    ingest_res = ingest_all_synthetic_data()
+    detect_res = detect_revenue_at_risk(session)
+
+    return {
+        "status": "success",
+        "ingested": ingest_res,
+        "detection": detect_res
+    }
+
