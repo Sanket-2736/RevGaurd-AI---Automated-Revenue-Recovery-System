@@ -42,7 +42,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-your_cerebras_api_key_here}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:
@@ -61,7 +62,8 @@ services:
     restart: always
     command: rq worker recovery_queue --url redis://redis:6379/0
     environment:
-      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-your_cerebras_api_key_here}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:

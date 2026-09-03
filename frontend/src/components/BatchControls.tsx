@@ -35,7 +35,7 @@ export const BatchControls: React.FC<BatchControlsProps> = ({
             Autonomous Batch Recovery Controls
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            Enqueue detected revenue-at-risk cases for instant Cerebras LLM evaluation & Guardrail filtering.
+            Enqueue detected revenue-at-risk cases for instant OpenRouter LLM evaluation & Guardrail filtering.
           </p>
         </div>
 

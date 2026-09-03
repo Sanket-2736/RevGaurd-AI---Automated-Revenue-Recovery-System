@@ -5,7 +5,7 @@ import json
 # Ensure backend package is in python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.ai.cerebras_client import classify_case
+from app.ai.openrouter_client import classify_case
 
 def run_test():
     sample_cases = [
@@ -51,7 +51,7 @@ def run_test():
         }
     ]
 
-    print("=== TESTING CEREBRAS CASE CLASSIFICATION ENGINE (gpt-oss-120b) ===\n")
+    print("=== TESTING OPENROUTER CASE CLASSIFICATION ENGINE (openai/gpt-4o-mini) ===\n")
 
     for idx, case in enumerate(sample_cases, start=1):
         print(f"--- Case #{idx}: {case['case_type']} (${case['amount_at_risk']:,.2f}) ---")

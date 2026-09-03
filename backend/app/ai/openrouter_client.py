@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import asyncio
 from typing import Dict, Any
 from dotenv import load_dotenv
 
@@ -8,15 +9,14 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Cerebras SDK imports
+# OpenRouter SDK imports
 try:
-    from cerebras.cloud.sdk import Cerebras, AsyncCerebras
+    from openrouter import OpenRouter
 except ImportError:
-    Cerebras = None
-    AsyncCerebras = None
+    OpenRouter = None
 
-CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
-MODEL_NAME = "gpt-oss-120b"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+MODEL_NAME = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
 CLASSIFY_CASE_TOOL = {
     "type": "function",
@@ -72,11 +72,11 @@ Guidelines & Guardrails:
 """
 
 def _is_api_key_valid() -> bool:
-    return bool(CEREBRAS_API_KEY and not CEREBRAS_API_KEY.startswith("your_cerebras_api_key"))
+    return bool(OPENROUTER_API_KEY and not OPENROUTER_API_KEY.startswith("your_openrouter"))
 
 def _fallback_classify_case(case: dict) -> Dict[str, Any]:
     """
-    Deterministic fallback heuristic classifier used when CEREBRAS_API_KEY is missing,
+    Deterministic fallback heuristic classifier used when OPENROUTER_API_KEY is missing,
     placeholder, or network call is unavailable.
     """
     case_type = case.get("case_type", "FAILED_PAYMENT")
@@ -158,25 +158,24 @@ def _fallback_classify_case(case: dict) -> Dict[str, Any]:
 
 def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
-    Synchronously classifies an at-risk case using Cerebras client (gpt-oss-120b) with tool calling.
+    Synchronously classifies an at-risk case using OpenRouter client (openai/gpt-4o-mini) with tool calling.
     If force_fallback is True, uses deterministic fallback classifier directly for high-throughput bulk runs.
     """
-    if force_fallback or not _is_api_key_valid() or Cerebras is None:
+    if force_fallback or not _is_api_key_valid() or OpenRouter is None:
         return _fallback_classify_case(case)
 
     try:
-        client = Cerebras(api_key=CEREBRAS_API_KEY)
+        client = OpenRouter(api_key=OPENROUTER_API_KEY)
         user_content = f"Classify this at-risk recovery case: {json.dumps(case)}"
 
-        completion = client.chat.completions.create(
+        completion = client.chat.send(
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content}
             ],
             tools=[CLASSIFY_CASE_TOOL],
-            tool_choice={"type": "function", "function": {"name": "classify_recovery_case"}},
-            reasoning_effort="low"
+            tool_choice={"type": "function", "function": {"name": "classify_recovery_case"}}
         )
 
         tool_calls = completion.choices[0].message.tool_calls
@@ -191,44 +190,20 @@ def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
             }
 
     except Exception as e:
-        logger.warning(f"Cerebras API call failed ({e}); switching to fallback classifier")
+        logger.warning(f"OpenRouter API call failed ({e}); switching to fallback classifier")
 
     return _fallback_classify_case(case)
 
 async def classify_case_async(case: dict) -> Dict[str, Any]:
     """
-    Asynchronously classifies an at-risk case using AsyncCerebras client (gpt-oss-120b).
+    Asynchronously classifies an at-risk case using OpenRouter client.
     """
-    if not _is_api_key_valid() or AsyncCerebras is None:
+    if not _is_api_key_valid() or OpenRouter is None:
         return _fallback_classify_case(case)
 
     try:
-        async_client = AsyncCerebras(api_key=CEREBRAS_API_KEY)
-        user_content = f"Classify this at-risk recovery case: {json.dumps(case)}"
-
-        completion = await async_client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content}
-            ],
-            tools=[CLASSIFY_CASE_TOOL],
-            tool_choice={"type": "function", "function": {"name": "classify_recovery_case"}},
-            reasoning_effort="low"
-        )
-
-        tool_calls = completion.choices[0].message.tool_calls
-        if tool_calls:
-            args = json.loads(tool_calls[0].function.arguments)
-            return {
-                "root_cause": str(args.get("root_cause", "")),
-                "recommended_action": str(args.get("recommended_action", "SEND_REMINDER")),
-                "confidence": float(args.get("confidence", 0.8)),
-                "reason": str(args.get("reason", "")),
-                "requires_human_approval": bool(args.get("requires_human_approval", False))
-            }
-
+        return await asyncio.to_thread(classify_case, case)
     except Exception as e:
-        logger.warning(f"Async Cerebras API call failed ({e}); switching to fallback classifier")
+        logger.warning(f"Async OpenRouter API call failed ({e}); switching to fallback classifier")
 
     return _fallback_classify_case(case)

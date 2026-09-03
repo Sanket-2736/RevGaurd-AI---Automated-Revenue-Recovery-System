@@ -59,7 +59,7 @@ export const PipelineStepper: React.FC<PipelineStepperProps> = ({
     {
       id: 2,
       name: '3. AI Classification',
-      desc: 'Cerebras Root Cause',
+      desc: 'OpenRouter Root Cause',
       icon: Cpu,
     },
     {

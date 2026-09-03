@@ -106,7 +106,7 @@ def run_full_demo(seed: int = 42):
 
     # 4. Process all cases synchronously through full pipeline
     max_live_ai_calls = 5
-    print(f"\n[Step 4/5] Processing all detected cases (First {max_live_ai_calls} live Cerebras AI calls -> Bulk deterministic run -> Guardrails -> Simulator)...")
+    print(f"\n[Step 4/5] Processing all detected cases (First {max_live_ai_calls} live OpenRouter AI calls -> Bulk deterministic run -> Guardrails -> Simulator)...")
 
     gt_correct = 0
     gt_total = 0
@@ -127,7 +127,7 @@ def run_full_demo(seed: int = 42):
                 "status": case.status.value if hasattr(case.status, 'value') else str(case.status)
             }
 
-            # Step 4a: Classify (Live Cerebras AI for first N cases, deterministic fallback for remaining bulk run)
+            # Step 4a: Classify (Live OpenRouter AI for first N cases, deterministic fallback for remaining bulk run)
             use_fallback = (idx > max_live_ai_calls)
             ai_decision = classify_case(payload, force_fallback=use_fallback)
             rec_action = ai_decision.get("recommended_action", "SEND_REMINDER")

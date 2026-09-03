@@ -43,7 +43,7 @@ export const DemoGuideModal: React.FC<DemoGuideModalProps> = ({ isOpen, onClose 
               <span className="text-[10px] font-mono text-gray-400">INTRO</span>
             </div>
             <p className="text-gray-200 italic leading-relaxed">
-              "Judges, businesses lose up to 15% of ARR to silent revenue leakage—expired credit cards, abandoned checkouts, and overdue invoices. Existing tools are rigid retry loops that spam customers. We built RevGuard AI—an autonomous revenue recovery agent powered by Cerebras."
+              "Judges, businesses lose up to 15% of ARR to silent revenue leakage—expired credit cards, abandoned checkouts, and overdue invoices. Existing tools are rigid retry loops that spam customers. We built RevGuard AI—an autonomous revenue recovery agent powered by OpenRouter."
             </p>
           </div>
 
@@ -57,7 +57,7 @@ export const DemoGuideModal: React.FC<DemoGuideModalProps> = ({ isOpen, onClose 
               <span className="text-[10px] font-mono text-emerald-400 font-bold">CLICK: ⚡ Run Recovery Batch</span>
             </div>
             <p className="text-gray-200 italic leading-relaxed">
-              "Watch our agent in action. Here we have $376,590 tied up across 381 detected risk cases. I’m firing an async batch run now. In real-time via Server-Sent Events, Cerebras LLM analyzes each case, classifies the root cause, and selects the optimal recovery action."
+              "Watch our agent in action. Here we have $376,590 tied up across 381 detected risk cases. I’m firing an async batch run now. In real-time via Server-Sent Events, OpenRouter LLM analyzes each case, classifies the root cause, and selects the optimal recovery action."
             </p>
           </div>
 
@@ -85,7 +85,7 @@ export const DemoGuideModal: React.FC<DemoGuideModalProps> = ({ isOpen, onClose 
               <span className="text-[10px] font-mono text-purple-400 font-bold">CLICK: AI Reasoning Toggle</span>
             </div>
             <p className="text-gray-200 italic leading-relaxed">
-              "Let's inspect the AI's reasoning. For Case #1, Cerebras identified 'Card Expired' with 95% confidence and chose 'UPDATE_PAYMENT_METHOD' instead of blindly retrying a dead card. Safe cases execute automatically in our simulator."
+              "Let's inspect the AI's reasoning. For Case #1, OpenRouter identified 'Card Expired' with 95% confidence and chose 'UPDATE_PAYMENT_METHOD' instead of blindly retrying a dead card. Safe cases execute automatically in our simulator."
             </p>
           </div>
 

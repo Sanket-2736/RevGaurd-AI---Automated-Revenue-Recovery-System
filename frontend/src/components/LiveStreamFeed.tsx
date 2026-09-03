@@ -169,8 +169,8 @@ export const LiveStreamFeed: React.FC<LiveStreamFeedProps> = ({ events, isStream
                 {isExpanded && (
                   <div className="mt-3 pt-3 border-t border-gray-800/80 bg-gray-950/90 rounded-lg p-3 font-mono text-[11px] text-emerald-400 border border-gray-800 overflow-x-auto">
                     <div className="flex items-center justify-between text-gray-400 mb-2 pb-1 border-b border-gray-800 text-[10px]">
-                      <span>Cerebras LLM Output Payload</span>
-                      <span className="text-purple-400 font-semibold">gpt-oss-120b</span>
+                      <span>OpenRouter LLM Output Payload</span>
+                      <span className="text-purple-400 font-semibold">openai/gpt-4o-mini</span>
                     </div>
                     <pre>
                       {JSON.stringify(

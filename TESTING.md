@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 Verify your environment variables (in `.env` or exported in terminal):
 ```env
-CEREBRAS_API_KEY=your_cerebras_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 MAX_AUTO_APPROVAL_AMOUNT=500.00
 MAX_RETRIES=3
 MIN_CONFIDENCE=0.60

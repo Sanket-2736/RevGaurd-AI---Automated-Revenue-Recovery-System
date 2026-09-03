@@ -3,7 +3,7 @@
 [![Run Pytest Suite](https://github.com/Sanket-11/AI-Revenue-Recovery-Agent/actions/workflows/test.yml/badge.svg)](https://github.com/Sanket-11/AI-Revenue-Recovery-Agent/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An autonomous agentic system for recovering lost revenue, failed payments, abandoned checkouts, and overdue invoices using Cerebras LLMs, FastAPI, SQLModel, Redis RQ, and React.
+An autonomous agentic system for recovering lost revenue, failed payments, abandoned checkouts, and overdue invoices using OpenRouter LLMs, FastAPI, SQLModel, Redis RQ, and React.
 
 ---
 
@@ -11,7 +11,7 @@ An autonomous agentic system for recovering lost revenue, failed payments, aband
 
 Businesses lose up to 15% of annual recurring revenue due to involuntary churn, card expirations, soft declines, abandoned carts, and overdue invoices. Traditional recovery workflows rely on static, rigid dunning rules that either spam customers or escalate unnecessarily, increasing customer friction and operational cost.
 
-The **AI Revenue Recovery Agent** dynamically evaluates at-risk revenue cases in real-time, leverages Cerebras LLMs (`gpt-oss-120b` / `llama3.1-8b`) for root-cause classification, enforces strict financial safety guardrails, and autonomously executes optimized recovery actions while maintaining a zero-trust audit ledger.
+The **AI Revenue Recovery Agent** dynamically evaluates at-risk revenue cases in real-time, leverages OpenRouter LLMs (`openai/gpt-4o-mini`) for root-cause classification, enforces strict financial safety guardrails, and autonomously executes optimized recovery actions while maintaining a zero-trust audit ledger.
 
 ---
 
@@ -35,7 +35,7 @@ The **AI Revenue Recovery Agent** dynamically evaluates at-risk revenue cases in
                                         │
                                         ▼
                             ┌────────────────────────┐
-                            │  Cerebras AI Engine    │
+                            │  OpenRouter AI Engine  │
                             │ (root-cause & action)  │
                             └───────────┬────────────┘
                                         │

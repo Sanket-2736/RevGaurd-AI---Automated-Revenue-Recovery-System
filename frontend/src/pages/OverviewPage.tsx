@@ -52,7 +52,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             Autonomous System Pitch & Core Purpose
           </span>
           <p className="text-base lg:text-lg font-bold text-white leading-snug font-display">
-            This agent finds money businesses are about to lose, decides why using Cerebras LLMs, and safely tries to get it back — every number below updates live as it runs.
+            This agent finds money businesses are about to lose, decides why using OpenRouter LLMs, and safely tries to get it back — every number below updates live as it runs.
           </p>
         </div>
       </div>

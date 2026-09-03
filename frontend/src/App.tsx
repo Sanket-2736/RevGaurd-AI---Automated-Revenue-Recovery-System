@@ -111,7 +111,7 @@ export default function App() {
           popover: {
             title: '1. One-Sentence System Pitch',
             description:
-              'This agent finds money businesses are about to lose, decides why using Cerebras LLMs, and safely tries to get it back — every number below updates live as it runs.',
+              'This agent finds money businesses are about to lose, decides why using OpenRouter LLMs, and safely tries to get it back — every number below updates live as it runs.',
             side: 'bottom',
             align: 'start',
           },
@@ -131,7 +131,7 @@ export default function App() {
           popover: {
             title: '3. Autonomous Recovery Controls',
             description:
-              'Defaults to 381 cases (the complete dataset). Click "⚡ Run Recovery Batch" to launch real-time Cerebras LLM classification and Guardrail evaluations.',
+              'Defaults to 381 cases (the complete dataset). Click "⚡ Run Recovery Batch" to launch real-time OpenRouter LLM classification and Guardrail evaluations.',
             side: 'bottom',
             align: 'start',
           },
@@ -141,7 +141,7 @@ export default function App() {
           popover: {
             title: '4. Live Case Execution Feed (SSE Stream)',
             description:
-              'Streams real-time case evaluations as workers process them. Click "AI Reasoning" on any card to view full Cerebras LLM JSON output cards.',
+              'Streams real-time case evaluations as workers process them. Click "AI Reasoning" on any card to view full OpenRouter LLM JSON output cards.',
             side: 'top',
             align: 'start',
           },

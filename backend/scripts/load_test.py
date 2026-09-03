@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.ai import classify_case_async
 from app.simulator.recovery_simulator import find_synthetic_data_dir
 
-# Silence verbose httpx / cerebras logs during benchmark
+# Silence verbose httpx / openrouter logs during benchmark
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("app.ai.cerebras_client").setLevel(logging.WARNING)
-logging.getLogger("cerebras.cloud.sdk").setLevel(logging.WARNING)
+logging.getLogger("app.ai.openrouter_client").setLevel(logging.WARNING)
+logging.getLogger("openrouter").setLevel(logging.WARNING)
 
 def load_synthetic_cases(target_count: int = 1000) -> List[Dict[str, Any]]:
     data_dir = find_synthetic_data_dir()

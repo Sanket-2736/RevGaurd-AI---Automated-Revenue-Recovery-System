@@ -40,7 +40,7 @@ export const GuardrailLedger: React.FC<GuardrailLedgerProps> = ({ events, loadin
     {
       id: 'RULE_4',
       name: 'Rule 4: Min AI Confidence Score (0.60)',
-      condition: 'Cerebras LLM classification confidence < 0.60 (MIN_CONFIDENCE threshold)',
+      condition: 'OpenRouter LLM classification confidence < 0.60 (MIN_CONFIDENCE threshold)',
       decision: 'HUMAN_REVIEW (BLOCKED)',
       icon: ShieldAlert,
       color: 'text-purple-400',

@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 load_dotenv()
 
-from app.ai.cerebras_client import classify_case
+from app.ai.openrouter_client import classify_case
 
 def test_key():
-    print("Testing live Cerebras LLM API call with updated key...")
+    print("Testing live OpenRouter LLM API call with updated key...")
     sample_case = {
         "case_id": 1,
         "case_type": "FAILED_PAYMENT",
@@ -20,7 +20,7 @@ def test_key():
     }
 
     res = classify_case(sample_case)
-    print("\nLive Cerebras AI Classification Result:")
+    print("\nLive OpenRouter AI Classification Result:")
     print(res)
 
 if __name__ == "__main__":

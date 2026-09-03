@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
               </h1>
             </div>
             <p className="text-xs text-gray-400 font-medium">
-              Autonomous Revenue Recovery System • Powered by Cerebras LLM
+              Autonomous Revenue Recovery System • Powered by OpenRouter LLM
             </p>
           </div>
         </div>
@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gray-900/80 border border-gray-800 text-xs text-purple-300">
             <Cpu className="h-3.5 w-3.5 text-purple-400" />
-            <span>Cerebras LLM Active</span>
+            <span>OpenRouter LLM Active</span>
           </div>
 
           <div className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gray-900/80 border border-gray-800 text-xs text-emerald-300">

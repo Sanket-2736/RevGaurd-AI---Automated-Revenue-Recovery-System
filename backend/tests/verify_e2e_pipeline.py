@@ -10,7 +10,7 @@ def run_pipeline_for_case(case_id: int, session: Session) -> dict:
     """
     Executes the end-to-end pipeline for a RecoveryCase:
     1. Fetch case & customer details
-    2. Classify case using AI (Cerebras / fallback)
+    2. Classify case using AI (OpenRouter / fallback)
     3. Validate action through Guardrails engine
     4. IF APPROVED: Execute recovery action in Simulator
     5. IF BLOCKED: Assert simulator is NEVER called & return guardrail blockage payload
