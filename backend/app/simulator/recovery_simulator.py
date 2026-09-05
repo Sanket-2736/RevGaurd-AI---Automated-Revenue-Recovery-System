@@ -181,12 +181,19 @@ def simulate_track_promise_to_pay(case: Union[RecoveryCase, dict]) -> Dict[str, 
 def execute_recovery_action(
     case: Union[RecoveryCase, dict],
     approved_action: str,
-    session: Optional[Session] = None
+    session: Optional[Session] = None,
+    guardrail_decision: Optional[str] = "APPROVED"
 ) -> Dict[str, Any]:
     """
     Dispatches approved recovery action to the appropriate simulation function,
     updates RecoveryCase status and resolved_at timestamp, and creates a RecoveryAction row.
+    Defense in depth: Refuses execution if guardrail_decision is not 'APPROVED'.
     """
+    if guardrail_decision and str(guardrail_decision).upper() != "APPROVED":
+        raise ValueError(
+            f"Defense-in-depth Violation: execute_recovery_action refused execution for non-APPROVED guardrail decision '{guardrail_decision}'!"
+        )
+
     action_str = str(approved_action).upper().strip()
 
     # Dispatch to specific simulator function

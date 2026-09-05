@@ -3,9 +3,14 @@ import json
 import logging
 import asyncio
 from typing import Dict, Any
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+# Search for .env starting from cwd upwards to ensure root or backend .env is found
+dotenv_path = find_dotenv(usecwd=True)
+if dotenv_path:
+    load_dotenv(dotenv_path, override=True)
+else:
+    load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -61,14 +66,15 @@ CLASSIFY_CASE_TOOL = {
 }
 
 SYSTEM_PROMPT = """You are an expert AI Revenue Recovery Decision Agent.
-Your mission is to classify at-risk payment, checkout, subscription, and invoice cases to maximize recovery while minimizing customer friction.
+Your mission is to evaluate an at-risk revenue case payload and classify the underlying root cause and recommended recovery action.
 
-Guidelines & Guardrails:
-1. Be conservative on high amounts (e.g., amount_at_risk >= $500.0) or repeated failures by setting requires_human_approval = True or recommending ESCALATE.
-2. For expired cards, recommend UPDATE_PAYMENT_METHOD.
-3. For temporary failures or soft declines, recommend RETRY_PAYMENT.
-4. For overdue invoices under 30 days, recommend SEND_REMINDER. For invoices >60 days overdue, recommend ESCALATE.
-5. You MUST call the classify_recovery_case tool with strict adherence to the schema.
+Guidelines:
+1. Base your reasoning strictly on the facts provided in the input case payload. Do not invent, assume, or cite numbers, dates, or amounts not present in the input.
+2. For expired payment cards, recommend UPDATE_PAYMENT_METHOD.
+3. For temporary payment gateway or network failures, recommend RETRY_PAYMENT.
+4. For abandoned checkouts, recommend SEND_REMINDER.
+5. For severely overdue invoices or high-value/risky transactions requiring human sign-off, set requires_human_approval = True or recommend ESCALATE.
+6. You MUST call the classify_recovery_case tool with strict adherence to the schema.
 """
 
 def _is_api_key_valid() -> bool:
@@ -76,8 +82,7 @@ def _is_api_key_valid() -> bool:
 
 def _fallback_classify_case(case: dict) -> Dict[str, Any]:
     """
-    Deterministic fallback heuristic classifier used when OPENROUTER_API_KEY is missing,
-    placeholder, or network call is unavailable.
+    Deterministic fallback heuristic classifier used ONLY when force_fallback=True is explicitly set.
     """
     case_type = case.get("case_type", "FAILED_PAYMENT")
     amount = float(case.get("amount_at_risk", 0.0))
@@ -158,11 +163,30 @@ def _fallback_classify_case(case: dict) -> Dict[str, Any]:
 
 def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
-    Synchronously classifies an at-risk case using OpenRouter client (openai/gpt-4o-mini) with tool calling.
-    If force_fallback is True, uses deterministic fallback classifier directly for high-throughput bulk runs.
+    Classifies an at-risk case using OpenRouter client (openai/gpt-4o-mini) with tool calling.
+    If force_fallback is True, uses deterministic fallback classifier directly.
     """
-    if force_fallback or not _is_api_key_valid() or OpenRouter is None:
+    if force_fallback:
+        logger.info("[FALLBACK PATH] Explicit force_fallback=True requested; using fallback classifier.")
         return _fallback_classify_case(case)
+
+    if not _is_api_key_valid():
+        msg = "[CRITICAL ERROR] OPENROUTER_API_KEY is missing or invalid! Live API call required."
+        logger.error(msg)
+        print(f"\n[ERROR] {msg}\n")
+        raise ValueError(msg)
+
+    if OpenRouter is None:
+        msg = "[CRITICAL ERROR] openrouter SDK package is not imported!"
+        logger.error(msg)
+        print(f"\n[ERROR] {msg}\n")
+        raise RuntimeError(msg)
+
+    print(f"\n======================================================================")
+    print(f" [OPENROUTER LLM REQUEST]")
+    print(f" Model: {MODEL_NAME}")
+    print(f" Case Payload: {json.dumps(case)}")
+    print(f"======================================================================")
 
     try:
         client = OpenRouter(api_key=OPENROUTER_API_KEY)
@@ -179,31 +203,32 @@ def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
         )
 
         tool_calls = completion.choices[0].message.tool_calls
+        print(f"----------------------------------------------------------------------")
+        print(f" [OPENROUTER RAW RESPONSE]")
+        print(f" Tool Calls: {tool_calls}")
+        print(f"----------------------------------------------------------------------")
+
         if tool_calls:
             args = json.loads(tool_calls[0].function.arguments)
-            return {
+            result = {
                 "root_cause": str(args.get("root_cause", "")),
                 "recommended_action": str(args.get("recommended_action", "SEND_REMINDER")),
                 "confidence": float(args.get("confidence", 0.8)),
                 "reason": str(args.get("reason", "")),
                 "requires_human_approval": bool(args.get("requires_human_approval", False))
             }
+            print(f" [OPENROUTER PARSED RESULT]: {result}\n")
+            return result
+        else:
+            raise ValueError("OpenRouter response did not contain expected tool_calls payload")
 
     except Exception as e:
-        logger.warning(f"OpenRouter API call failed ({e}); switching to fallback classifier")
-
-    return _fallback_classify_case(case)
+        logger.error(f"[CRITICAL ERROR] OpenRouter API call failed: {e}")
+        print(f"\n[OPENROUTER API CALL FAILED]: {e}\n")
+        raise e
 
 async def classify_case_async(case: dict) -> Dict[str, Any]:
     """
     Asynchronously classifies an at-risk case using OpenRouter client.
     """
-    if not _is_api_key_valid() or OpenRouter is None:
-        return _fallback_classify_case(case)
-
-    try:
-        return await asyncio.to_thread(classify_case, case)
-    except Exception as e:
-        logger.warning(f"Async OpenRouter API call failed ({e}); switching to fallback classifier")
-
-    return _fallback_classify_case(case)
+    return await asyncio.to_thread(classify_case, case)

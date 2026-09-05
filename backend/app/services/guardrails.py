@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 def get_max_auto_approval_amount() -> float:
     try:
-        return float(os.getenv("MAX_AUTO_APPROVAL_AMOUNT", "500000.0"))
+        return float(os.getenv("MAX_AUTO_APPROVAL_AMOUNT", "500.0"))
     except ValueError:
-        return 500000.0
+        return 500.0
 
 def get_max_retries() -> int:
     try:
@@ -34,7 +34,7 @@ def validate_action(
     """
     Validates an AI-recommended recovery action against 5 sequential safety guardrails:
     1. Case already resolved/paid -> BLOCKED (route=CLOSED)
-    2. amount_at_risk > MAX_AUTO_APPROVAL_AMOUNT -> BLOCKED (route=HUMAN_REVIEW)
+    2. amount_at_risk > MAX_AUTO_APPROVAL_AMOUNT ($500.00 default) or action == ESCALATE or requires_human_approval == True -> BLOCKED (route=HUMAN_REVIEW / ESCALATE)
     3. action == RETRY_PAYMENT and attempt_count >= MAX_RETRIES -> BLOCKED (route=ESCALATE)
     4. confidence < MIN_CONFIDENCE -> BLOCKED (route=HUMAN_REVIEW)
     5. Otherwise -> APPROVED (route=AUTO_EXECUTE)
@@ -59,7 +59,8 @@ def validate_action(
         resolved_at = case.resolved_at
 
     # Extract decision attributes
-    action = str(ai_decision.get("recommended_action", "")).upper()
+    action = str(ai_decision.get("recommended_action", "")).upper().strip()
+    requires_human_approval = bool(ai_decision.get("requires_human_approval", False))
     try:
         confidence = float(ai_decision.get("confidence", 0.0))
     except (ValueError, TypeError):
@@ -79,18 +80,16 @@ def validate_action(
         rule_triggered = "RULE_1_CASE_ALREADY_CLOSED"
         reason = f"Case is already resolved or closed (status={case_status})."
 
-    # Rule 2: Exceeds maximum auto-approval threshold
-    elif amount_at_risk > max_amount:
+    # Rule 2: Exceeds maximum auto-approval threshold ($500 limit) or requires human approval / escalation
+    elif amount_at_risk > max_amount or action in ["ESCALATE", "ESCALATE_TO_COLLECTIONS"] or requires_human_approval:
         decision = GuardrailDecision.BLOCKED
-        route = "HUMAN_REVIEW"
+        route = "ESCALATE" if (action in ["ESCALATE", "ESCALATE_TO_COLLECTIONS"] or requires_human_approval) else "HUMAN_REVIEW"
         rule_triggered = "RULE_2_EXCEEDS_MAX_AUTO_APPROVAL_AMOUNT"
-        reason = f"Amount at risk (${amount_at_risk:,.2f}) exceeds max auto-approval threshold (${max_amount:,.2f})."
+        reason = f"Amount at risk (${amount_at_risk:,.2f}) exceeds max auto-approval threshold (${max_amount:,.2f}) or requires human sign-off."
 
     # Rule 3: Retry attempts limit reached
     elif action in ["RETRY_PAYMENT", "EXECUTE_SMART_RETRY"] and attempt_count >= max_retries:
         decision = GuardrailDecision.BLOCKED
-
-
         route = "ESCALATE"
         rule_triggered = "RULE_3_MAX_RETRIES_EXCEEDED"
         reason = f"Payment retry attempts ({attempt_count}) reached or exceeded limit ({max_retries})."
