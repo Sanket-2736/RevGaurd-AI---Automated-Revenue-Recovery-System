@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from app.db import get_session
 from app.models import RecoveryCase, RecoveryAction, GuardrailEvent, CaseStatus, CaseType, GuardrailDecision
@@ -175,6 +175,15 @@ def reset_demo_state(session: Session = Depends(get_session)):
     re-ingesting synthetic datasets, and re-running detection.
     """
     logger.info("[API] POST /api/reset")
+    from app.routers.batch import get_active_batch_id
+    active_batch = get_active_batch_id()
+    if active_batch:
+        logger.warning(f"[CONCURRENCY GUARD BLOCKED] Rejected reset request: Active batch '{active_batch}' is currently processing.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Batch '{active_batch}' is currently processing. Cannot start a new batch or reset until the active batch completes."
+        )
+
     from app.routers.ingestion import ingest_all_synthetic_data
     from app.services.detection import detect_revenue_at_risk
     from app.utils.path_utils import find_synthetic_data_dir

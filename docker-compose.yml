@@ -47,6 +47,7 @@ services:
       - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-meta-llama/llama-3.2-1b-instruct:free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - BATCH_MODE=${BATCH_MODE:-INLINE}
       - SYNTHETIC_DATA_DIR=/app/synthetic-data
     volumes:
       - ./backend:/app
@@ -72,6 +73,7 @@ services:
       - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-meta-llama/llama-3.2-1b-instruct:free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - BATCH_MODE=${BATCH_MODE:-INLINE}
       - SYNTHETIC_DATA_DIR=/app/synthetic-data
     volumes:
       - ./backend:/app

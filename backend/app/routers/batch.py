@@ -18,8 +18,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/batch", tags=["batch"])
 
-# In-memory fallback batch tracking cache when Redis/RQ is offline
+# In-memory fallback batch tracking cache when Redis/RQ is offline or INLINE mode is enabled
 _FALLBACK_BATCH_STORE: Dict[str, Dict[str, Any]] = {}
+
+def get_active_batch_id() -> Optional[str]:
+    """
+    Returns active batch_id if an INLINE or fallback background batch is currently processing (is_finished == False).
+    """
+    for bid, data in _FALLBACK_BATCH_STORE.items():
+        if not data.get("is_finished", False):
+            return bid
+    return None
 
 @router.post("/run")
 def run_batch_processing(
@@ -28,8 +37,18 @@ def run_batch_processing(
 ):
     """
     Enqueues N DETECTED cases for asynchronous processing and returns a batch_id immediately (non-blocking).
+    Respects BATCH_MODE env var ('RQ_REDIS' vs 'INLINE').
     """
     logger.info(f"[API] POST /api/batch/run limit={limit}")
+
+    # Concurrency Guard: reject request if an inline batch is currently processing
+    active_batch = get_active_batch_id()
+    if active_batch:
+        logger.warning(f"[CONCURRENCY GUARD BLOCKED] Rejected batch run request: Active batch '{active_batch}' is currently processing.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Batch '{active_batch}' is currently processing. Cannot start a new batch or reset until the active batch completes."
+        )
 
     # Fetch DETECTED cases up to limit
     detected_cases = session.exec(
@@ -59,33 +78,40 @@ def run_batch_processing(
         ).all()
         logger.info(f"[BATCH AUTO-RESET COMPLETE] Re-queried {len(detected_cases)} DETECTED cases for limit={limit}.")
 
+    import os
+    batch_mode_setting = os.getenv("BATCH_MODE", "RQ_REDIS").upper().strip()
+    force_inline = (batch_mode_setting == "INLINE")
+
     batch_id = f"batch_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     job_ids = []
-    use_rq = True
+    use_rq = True if not force_inline else False
 
-    try:
-        q = get_queue()
-        r = get_redis_connection()
+    if not force_inline:
+        try:
+            q = get_queue()
+            r = get_redis_connection()
 
-        # Bulk enqueue using RQ's prepare_data and enqueue_many for high throughput (< 0.3s for 381 cases)
-        jobs = [
-            q.prepare_data(process_case, args=(case.id, batch_id), job_id=f"{batch_id}_case_{case.id}")
-            for case in detected_cases
-        ]
-        enqueued_jobs = q.enqueue_many(jobs)
-        job_ids = [j.id for j in enqueued_jobs]
+            # Bulk enqueue using RQ's prepare_data and enqueue_many for high throughput (< 0.3s for 381 cases)
+            jobs = [
+                q.prepare_data(process_case, args=(case.id, batch_id), job_id=f"{batch_id}_case_{case.id}")
+                for case in detected_cases
+            ]
+            enqueued_jobs = q.enqueue_many(jobs)
+            job_ids = [j.id for j in enqueued_jobs]
 
-        # Store job IDs list under Redis key for batch status tracking (expires in 24h)
-        batch_key = f"batch:{batch_id}:jobs"
-        r.sadd(batch_key, *job_ids)
-        r.expire(batch_key, 86400)
+            # Store job IDs list under Redis key for batch status tracking (expires in 24h)
+            batch_key = f"batch:{batch_id}:jobs"
+            r.sadd(batch_key, *job_ids)
+            r.expire(batch_key, 86400)
 
-        logger.info(f"[BATCH ENQUEUE SUCCESS] Enqueued {len(job_ids)} jobs under batch '{batch_id}' via RQ queue (limit requested: {limit}).")
+            logger.info(f"[BATCH ENQUEUE SUCCESS] Enqueued {len(job_ids)} jobs under batch '{batch_id}' via RQ queue (limit requested: {limit}).")
 
-    except Exception as e:
-        logger.warning(f"Redis/RQ enqueue unavailable ({e}); executing fallback background processing for batch '{batch_id}'")
-        use_rq = False
+        except Exception as e:
+            logger.warning(f"Redis/RQ enqueue unavailable ({e}); executing fallback background processing for batch '{batch_id}'")
+            use_rq = False
 
+    if not use_rq:
+        logger.info(f"[BATCH INLINE MODE] Executing batch '{batch_id}' via INLINE background thread (BATCH_MODE={batch_mode_setting}).")
         _FALLBACK_BATCH_STORE[batch_id] = {
             "batch_id": batch_id,
             "total": len(detected_cases),

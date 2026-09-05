@@ -173,10 +173,23 @@ def _call_openrouter_model(case: dict, model_name: str) -> Dict[str, Any]:
         "requires_human_approval": bool(args.get("requires_human_approval", False))
     }
 
+def _is_daily_quota_error(e: Exception) -> bool:
+    err_msg = str(e).lower()
+    quota_indicators = [
+        "free-models-per-day",
+        "daily quota",
+        "daily-quota",
+        "free model requests per day",
+        "per-day",
+        "quota exceeded"
+    ]
+    return any(indicator in err_msg for indicator in quota_indicators)
+
 def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
     Tiered 3-Level Classification Flow:
     1. Tier 1 (AI_PRIMARY): Tries primary model (OPENROUTER_MODEL). Retries once with backoff on error.
+       * Fast-fails immediately to Tier 3 if error is daily quota exhaustion ("free-models-per-day").
     2. Tier 2 (AI_SECONDARY): Tries secondary model (OPENROUTER_FALLBACK_MODEL) if Tier 1 fails.
     3. Tier 3 (FALLBACK_RULE): Deterministic rule table if both AI models fail.
     Guaranteed NEVER to raise an unhandled exception to the caller.
@@ -207,6 +220,13 @@ def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
                 return res
             except (TooManyRequestsResponseError, OpenRouterError, Exception) as e:
                 tier1_error = e
+                if _is_daily_quota_error(e):
+                    logger.warning(
+                        f"[AI CLASSIFY FAST-FAIL] Daily quota limit detected for Case #{case_id} ('{e}'). "
+                        f"Skipping retry and Tier 2 secondary model attempts. Executing Tier 3 Fallback Rule table immediately."
+                    )
+                    return _rule_table_classify(case)
+
                 if attempt == 0:
                     logger.warning(f"[AI CLASSIFY RETRY] Case #{case_id} Tier 1 Primary Model attempt 1 failed ({type(e).__name__}: {e}). Retrying after 1.0s backoff...")
                     import time

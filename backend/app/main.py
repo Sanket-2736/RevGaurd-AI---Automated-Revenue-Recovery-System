@@ -1,3 +1,12 @@
+# -----------------------------------------------------------------------------
+# SINGLE-WORKER-PROCESS SAFETY NOTICE:
+# In INLINE batch mode (e.g., Render free tier without external Redis), in-memory
+# state (_FALLBACK_BATCH_STORE) is scoped to a single process PID. Deployments on Render
+# or Railway MUST execute with a single worker process (uvicorn --workers 1) to avoid
+# process state divergence.
+# -----------------------------------------------------------------------------
+
+import os
 import logging
 import time
 from fastapi import FastAPI, Request
@@ -28,12 +37,13 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_checks():
+    logger.info(f"[SERVER STARTUP] Process PID={os.getpid()} running FastAPI server. Single-worker mode required for INLINE batch state consistency.")
     logger.info("[STARTUP] Running synthetic data directory and CSV verification checks...")
     success, data_dir, csv_status = verify_synthetic_data_on_startup()
     if not success:
         logger.error(f"[STARTUP WARNING] Synthetic data resolution incomplete for dir: '{data_dir}' (Status: {csv_status})")
     else:
-        logger.info(f"[STARTUP READY] Backend initialized successfully with data directory: '{data_dir}'")
+        logger.info(f"[STARTUP READY] Backend initialized successfully with data directory: '{data_dir}' (PID={os.getpid()})")
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
