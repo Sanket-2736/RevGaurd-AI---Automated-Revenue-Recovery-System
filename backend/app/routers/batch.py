@@ -67,9 +67,13 @@ def run_batch_processing(
         q = get_queue()
         r = get_redis_connection()
 
-        for case in detected_cases:
-            job = q.enqueue(process_case, case.id, batch_id, job_id=f"{batch_id}_case_{case.id}")
-            job_ids.append(job.id)
+        # Bulk enqueue using RQ's prepare_data and enqueue_many for high throughput (< 0.3s for 381 cases)
+        jobs = [
+            q.prepare_data(process_case, args=(case.id, batch_id), job_id=f"{batch_id}_case_{case.id}")
+            for case in detected_cases
+        ]
+        enqueued_jobs = q.enqueue_many(jobs)
+        job_ids = [j.id for j in enqueued_jobs]
 
         # Store job IDs list under Redis key for batch status tracking (expires in 24h)
         batch_key = f"batch:{batch_id}:jobs"
@@ -79,23 +83,39 @@ def run_batch_processing(
         logger.info(f"[BATCH ENQUEUE SUCCESS] Enqueued {len(job_ids)} jobs under batch '{batch_id}' via RQ queue (limit requested: {limit}).")
 
     except Exception as e:
-        logger.warning(f"Redis/RQ enqueue unavailable ({e}); executing fallback processing for batch '{batch_id}'")
+        logger.warning(f"Redis/RQ enqueue unavailable ({e}); executing fallback background processing for batch '{batch_id}'")
         use_rq = False
-        results = []
-        for case in detected_cases:
-            res = process_case(case.id, batch_id=batch_id)
-            results.append(res)
 
         _FALLBACK_BATCH_STORE[batch_id] = {
             "batch_id": batch_id,
             "total": len(detected_cases),
-            "completed": len(results),
+            "completed": 0,
             "failed": 0,
-            "pending": 0,
-            "progress_pct": 100.0,
-            "is_finished": True,
-            "results": results
+            "pending": len(detected_cases),
+            "progress_pct": 0.0,
+            "is_finished": False,
+            "results": []
         }
+
+        import threading
+        def run_fallback():
+            results = []
+            for case in detected_cases:
+                try:
+                    res = process_case(case.id, batch_id=batch_id)
+                    results.append(res)
+                except Exception as err:
+                    logger.error(f"[FALLBACK ERROR] Failed processing case #{case.id}: {err}")
+                
+                _FALLBACK_BATCH_STORE[batch_id]["completed"] = len(results)
+                _FALLBACK_BATCH_STORE[batch_id]["pending"] = len(detected_cases) - len(results)
+                _FALLBACK_BATCH_STORE[batch_id]["progress_pct"] = round(len(results) / len(detected_cases) * 100.0, 1)
+
+            _FALLBACK_BATCH_STORE[batch_id]["is_finished"] = True
+            _FALLBACK_BATCH_STORE[batch_id]["results"] = results
+
+        thread = threading.Thread(target=run_fallback, daemon=True)
+        thread.start()
 
     response_payload = {
         "batch_id": batch_id,

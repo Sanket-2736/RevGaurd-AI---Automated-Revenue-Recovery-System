@@ -86,11 +86,23 @@ def get_live_metrics(session: Session = Depends(get_session)) -> Dict[str, Any]:
     human_escalations = sum(1 for c in cases if c.status == CaseStatus.ESCALATED)
     guardrail_blocks = sum(1 for ge in guardrail_events if ge.decision == GuardrailDecision.BLOCKED)
 
+    # Count cases by decision source
+    by_decision_source = {
+        "AI_PRIMARY": 0,
+        "AI_SECONDARY": 0,
+        "FALLBACK_RULE": 0
+    }
+    for c in cases:
+        if c.decision_source:
+            ds_str = c.decision_source.value if hasattr(c.decision_source, "value") else str(c.decision_source)
+            by_decision_source[ds_str] = by_decision_source.get(ds_str, 0) + 1
+
     return {
         "total_at_risk": total_at_risk,
         "total_recovered": total_recovered,
         "recovery_rate": overall_recovery_rate,
         "by_category": category_stats,
+        "by_decision_source": by_decision_source,
         "human_escalations": human_escalations,
         "guardrail_blocks": guardrail_blocks
     }
@@ -113,6 +125,7 @@ def get_all_cases(
 
     cases_out = []
     for case, customer in results:
+        dec_src = case.decision_source.value if hasattr(case.decision_source, "value") else (str(case.decision_source) if case.decision_source else "AI_PRIMARY")
         cases_out.append({
             "id": case.id,
             "case_type": case.case_type.value if hasattr(case.case_type, "value") else str(case.case_type),
@@ -121,6 +134,7 @@ def get_all_cases(
             "root_cause": case.root_cause,
             "recommended_action": case.recommended_action,
             "ai_confidence": case.ai_confidence,
+            "decision_source": dec_src,
             "customer_name": customer.name,
             "customer_email": customer.email,
             "created_at": case.created_at.isoformat() if case.created_at else None,
@@ -163,6 +177,13 @@ def reset_demo_state(session: Session = Depends(get_session)):
     logger.info("[API] POST /api/reset")
     from app.routers.ingestion import ingest_all_synthetic_data
     from app.services.detection import detect_revenue_at_risk
+    from app.utils.path_utils import find_synthetic_data_dir
+
+    try:
+        resolved_reset_path = find_synthetic_data_dir()
+        logger.info(f"[RESET HANDLER EXPLICIT PATH LOG] Endpoint resolved synthetic-data directory at request time: '{resolved_reset_path}'")
+    except Exception as err:
+        logger.error(f"[RESET HANDLER ERROR] Failed to resolve synthetic data path: {err}")
 
     # 1. Reset existing RecoveryCases to DETECTED and clear root causes / actions
     cases = session.exec(select(RecoveryCase)).all()

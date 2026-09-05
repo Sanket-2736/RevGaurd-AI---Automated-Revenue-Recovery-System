@@ -74,6 +74,8 @@ Clone the repository and spin up the backend service stack (Postgres, Redis, Bac
 docker compose up --build
 ```
 
+> **Note on `synthetic-data/` in Docker**: `synthetic-data/` is mounted as a read-only volume (`./synthetic-data:/app/synthetic-data:ro`), not baked into the image. For cloud deployments (e.g., Render, Railway) where bind mounts do not exist, either commit the CSVs into `backend/` so they are included via `COPY . .`, or generate them at container startup via the seed script, rather than relying on a local bind mount.
+
 Access the interfaces once containers are active:
 - **FastAPI OpenAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Backend Metrics Endpoint**: [http://localhost:8000/api/metrics](http://localhost:8000/api/metrics)

@@ -11,6 +11,7 @@ export interface MetricsResponse {
   total_recovered: number;
   recovery_rate: number;
   by_category: Record<string, CategoryStat>;
+  by_decision_source?: Record<string, number>;
   human_escalations: number;
   guardrail_blocks: number;
 }
@@ -23,6 +24,7 @@ export interface RecoveryCase {
   root_cause?: string | null;
   recommended_action?: string | null;
   ai_confidence?: number | null;
+  decision_source?: 'AI_PRIMARY' | 'AI_SECONDARY' | 'FALLBACK_RULE' | string | null;
   customer_name: string;
   customer_email: string;
   created_at?: string | null;
@@ -49,6 +51,7 @@ export interface SSEStreamEvent {
   reason?: string;
   confidence?: number;
   requires_human_approval?: boolean;
+  decision_source?: string;
   batch_id?: string;
   is_finished?: boolean;
   progress_pct?: number;
@@ -60,4 +63,15 @@ export interface BatchRunResponse {
   total_enqueued: number;
   mode?: string;
   message: string;
+}
+
+export interface BatchStatusResponse {
+  batch_id: string;
+  total: number;
+  completed: number;
+  failed: number;
+  pending: number;
+  progress_pct: number;
+  is_finished: boolean;
+  results: any[];
 }

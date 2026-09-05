@@ -40,6 +40,18 @@ export const CasesTable: React.FC<CasesTableProps> = ({ cases, loading, onRefres
     }
   };
 
+  const getSourceBadge = (source?: string | null) => {
+    switch (source) {
+      case 'AI_SECONDARY':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">AI Secondary</span>;
+      case 'FALLBACK_RULE':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Fallback Rule</span>;
+      case 'AI_PRIMARY':
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">AI Primary</span>;
+    }
+  };
+
   return (
     <div className="glass-panel rounded-2xl p-5 border border-gray-800 flex flex-col h-[520px]">
       
@@ -102,19 +114,20 @@ export const CasesTable: React.FC<CasesTableProps> = ({ cases, loading, onRefres
               <th className="py-2.5 px-3">Amount At Risk</th>
               <th className="py-2.5 px-3">Status</th>
               <th className="py-2.5 px-3">AI Recommendation</th>
+              <th className="py-2.5 px-3">Decision Source</th>
               <th className="py-2.5 px-3">Confidence</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/60 font-medium">
             {loading ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-500">
+                <td colSpan={8} className="py-8 text-center text-gray-500">
                   Loading cases from database...
                 </td>
               </tr>
             ) : filteredCases.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-500">
+                <td colSpan={8} className="py-8 text-center text-gray-500">
                   No revenue cases matching filters.
                 </td>
               </tr>
@@ -156,6 +169,9 @@ export const CasesTable: React.FC<CasesTableProps> = ({ cases, loading, onRefres
                     ) : (
                       <span className="text-gray-500 text-[11px]">Pending AI Evaluation</span>
                     )}
+                  </td>
+                  <td className="py-3 px-3">
+                    {c.recommended_action ? getSourceBadge(c.decision_source) : '-'}
                   </td>
                   <td className="py-3 px-3 font-mono text-purple-400 font-bold">
                     {c.ai_confidence ? `${Math.round(c.ai_confidence * 100)}%` : '-'}

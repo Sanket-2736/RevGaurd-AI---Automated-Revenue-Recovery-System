@@ -44,8 +44,13 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
+      - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-meta-llama/llama-3.2-1b-instruct:free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - SYNTHETIC_DATA_DIR=/app/synthetic-data
+    volumes:
+      - ./backend:/app
+      - ./synthetic-data:/app/synthetic-data:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,12 +65,17 @@ services:
       dockerfile: Dockerfile
     container_name: revenue_recovery_worker
     restart: always
-    command: rq worker recovery_queue --url redis://redis:6379/0
+    command: rq worker recovery_queue --url ${REDIS_URL:-redis://redis:6379/0}
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
+      - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-meta-llama/llama-3.2-1b-instruct:free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - SYNTHETIC_DATA_DIR=/app/synthetic-data
+    volumes:
+      - ./backend:/app
+      - ./synthetic-data:/app/synthetic-data:ro
     depends_on:
       postgres:
         condition: service_healthy

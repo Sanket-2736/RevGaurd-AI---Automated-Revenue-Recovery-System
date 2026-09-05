@@ -1,11 +1,16 @@
 import os
+import sys
 import csv
 import time
 import logging
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+sys.path.insert(0, "/app")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from app.ai import classify_case
-from app.simulator.recovery_simulator import find_synthetic_data_dir
+from app.utils.path_utils import find_synthetic_data_dir
 
 logger = logging.getLogger(__name__)
 

@@ -95,6 +95,8 @@ def process_case(case_id: int, batch_id: Optional[str] = None) -> Dict[str, Any]
         case.root_cause = ai_decision.get("root_cause")
         case.recommended_action = ai_decision.get("recommended_action")
         case.ai_confidence = ai_decision.get("confidence")
+        dec_src = ai_decision.get("decision_source", "AI_PRIMARY")
+        case.decision_source = dec_src.value if hasattr(dec_src, "value") else str(dec_src)
         session.add(case)
         session.commit()
         session.refresh(case)
@@ -153,7 +155,8 @@ def process_case(case_id: int, batch_id: Optional[str] = None) -> Dict[str, Any]
             "action": ai_decision.get("recommended_action", "UNKNOWN"),
             "approved": is_approved,
             "amount_recovered": amount_recovered,
-            "route": guardrail_result.get("route", "HUMAN_REVIEW")
+            "route": guardrail_result.get("route", "HUMAN_REVIEW"),
+            "decision_source": case.decision_source.value if hasattr(case.decision_source, "value") else str(case.decision_source)
         }
 
         if batch_id:
@@ -163,7 +166,7 @@ def process_case(case_id: int, batch_id: Optional[str] = None) -> Dict[str, Any]
                 r.publish(f"batch_events:{batch_id}", json.dumps(sse_event))
                 r.publish("batch_events_global", json.dumps(sse_event))
             except Exception as e:
-                logger.debug(f"Redis Pub/Sub event publish skipped ({e})")
+                logger.exception(f"[SSE PUBLISH ERROR] Failed to publish batch event for batch '{batch_id}', case #{case.id}: {e}")
 
         res_payload["sse_event"] = sse_event
         elapsed = time.time() - start_time

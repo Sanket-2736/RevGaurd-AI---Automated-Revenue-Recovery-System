@@ -1,4 +1,4 @@
-import { MetricsResponse, RecoveryCase, GuardrailEvent, BatchRunResponse } from './types';
+import { MetricsResponse, RecoveryCase, GuardrailEvent, BatchRunResponse, BatchStatusResponse } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -92,4 +92,8 @@ export function getSSEStreamUrl(batchId: string): string {
   const streamUrl = `${API_BASE_URL}/api/batch/${batchId}/stream`;
   console.log(`[API getSSEStreamUrl] Derived SSE stream URL: ${streamUrl}`);
   return streamUrl;
+}
+
+export async function getBatchStatus(batchId: string): Promise<BatchStatusResponse> {
+  return apiFetch<BatchStatusResponse>(`/api/batch/${batchId}/status`);
 }

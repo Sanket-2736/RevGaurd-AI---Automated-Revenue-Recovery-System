@@ -17,11 +17,15 @@ logger = logging.getLogger(__name__)
 # OpenRouter SDK imports
 try:
     from openrouter import OpenRouter
+    from openrouter.errors import TooManyRequestsResponseError, OpenRouterError
 except ImportError:
     OpenRouter = None
+    class TooManyRequestsResponseError(Exception): pass
+    class OpenRouterError(Exception): pass
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 MODEL_NAME = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+FALLBACK_MODEL_NAME = os.getenv("OPENROUTER_FALLBACK_MODEL", "meta-llama/llama-3.2-1b-instruct:free")
 
 CLASSIFY_CASE_TOOL = {
     "type": "function",
@@ -68,170 +72,178 @@ CLASSIFY_CASE_TOOL = {
 SYSTEM_PROMPT = """You are an expert AI Revenue Recovery Decision Agent.
 Your mission is to evaluate an at-risk revenue case payload and classify the underlying root cause and recommended recovery action.
 
-Guidelines:
-1. Base your reasoning strictly on the facts provided in the input case payload. Do not invent, assume, or cite numbers, dates, or amounts not present in the input.
-2. For expired payment cards, recommend UPDATE_PAYMENT_METHOD.
-3. For temporary payment gateway or network failures, recommend RETRY_PAYMENT.
-4. For abandoned checkouts, recommend SEND_REMINDER.
-5. For severely overdue invoices or high-value/risky transactions requiring human sign-off, set requires_human_approval = True or recommend ESCALATE.
-6. You MUST call the classify_recovery_case tool with strict adherence to the schema.
+Decision Guidelines Table:
+1. EXPIRED_CARD (Payment or Subscription):
+   - Recommended Action: UPDATE_PAYMENT_METHOD
+   - Reason: Payment card is expired on file; customer must provide updated card details.
+
+2. INSUFFICIENT_FUNDS (Soft decline / insufficient balance):
+   - Recommended Action: RETRY_PAYMENT (Schedule payday / smart retry).
+   - If customer_type is ENTERPRISE or amount_at_risk >= 500.0: RETRY_PAYMENT or SEND_REMINDER with requires_human_approval = True.
+
+3. GATEWAY_ERROR / NETWORK_TIMEOUT / PROCESSING_ERROR:
+   - Recommended Action: RETRY_PAYMENT
+   - Reason: Temporary payment processor or network glitch; execute smart retry.
+
+4. ABANDONED_CHECKOUT:
+   - Recommended Action: SEND_REMINDER
+   - Reason: Customer abandoned cart during checkout; send cart recovery reminder.
+
+5. FAILED_SUBSCRIPTION:
+   - If failure_reason is EXPIRED_CARD: UPDATE_PAYMENT_METHOD
+   - Otherwise: RETRY_PAYMENT
+
+6. OVERDUE_INVOICE:
+   - If days_overdue <= 30: SEND_REMINDER
+   - If 30 < days_overdue <= 60: SEND_REMINDER or TRACK_PROMISE_TO_PAY
+   - If days_overdue > 60 or amount_at_risk >= 500.0: ESCALATE (requires_human_approval = True)
+
+Base your reasoning strictly on the facts provided in the input case payload. You MUST call the classify_recovery_case tool with strict adherence to the schema.
 """
 
 def _is_api_key_valid() -> bool:
     return bool(OPENROUTER_API_KEY and not OPENROUTER_API_KEY.startswith("your_openrouter"))
 
-def _fallback_classify_case(case: dict) -> Dict[str, Any]:
+def _rule_table_classify(case: dict) -> Dict[str, Any]:
     """
-    Deterministic fallback heuristic classifier used ONLY when force_fallback=True is explicitly set.
+    Tier 3 Fallback Classifier: Deterministic rule table executed when both primary and secondary AI models fail.
+    Never guesses on unknown failure reasons — escalates to human review. Sets confidence=0.5 and requires_human_approval=True.
     """
-    case_type = case.get("case_type", "FAILED_PAYMENT")
-    amount = float(case.get("amount_at_risk", 0.0))
-    failure_reason = case.get("failure_reason", "")
-    days_overdue = int(case.get("days_overdue", 0))
+    failure_reason = str(case.get("failure_reason", "")).upper()
+    case_type = str(case.get("case_type", "")).upper()
 
-    requires_human_approval = (amount >= 500.0)
-
-    if case_type == "FAILED_PAYMENT":
-        if failure_reason == "EXPIRED_CARD":
-            return {
-                "root_cause": "Payment card expired on file",
-                "recommended_action": "UPDATE_PAYMENT_METHOD",
-                "confidence": 0.95,
-                "reason": "Card expiry detected; requesting updated payment method details from customer.",
-                "requires_human_approval": requires_human_approval
-            }
-        elif failure_reason == "INSUFFICIENT_FUNDS":
-            return {
-                "root_cause": "Insufficient funds in customer account",
-                "recommended_action": "RETRY_PAYMENT",
-                "confidence": 0.82,
-                "reason": "Soft decline due to insufficient funds; schedule payment retry near payday.",
-                "requires_human_approval": requires_human_approval
-            }
-        else:
-            return {
-                "root_cause": "Temporary payment gateway failure",
-                "recommended_action": "RETRY_PAYMENT",
-                "confidence": 0.90,
-                "reason": "Network or temporary gateway glitch; smart retry recommended.",
-                "requires_human_approval": requires_human_approval
-            }
-
+    if failure_reason == "EXPIRED_CARD":
+        action = "UPDATE_PAYMENT_METHOD"
+        root_cause = "Payment card expired on file"
+    elif failure_reason == "INSUFFICIENT_FUNDS":
+        action = "RETRY_PAYMENT"
+        root_cause = "Insufficient funds in customer account"
+    elif failure_reason in ["TEMPORARY_FAILURE", "GATEWAY_ERROR", "PROCESSING_ERROR", "NETWORK_TIMEOUT"]:
+        action = "RETRY_PAYMENT"
+        root_cause = "Temporary payment gateway failure"
     elif case_type == "ABANDONED_CHECKOUT":
-        return {
-            "root_cause": "Checkout abandoned at payment step",
-            "recommended_action": "SEND_REMINDER",
-            "confidence": 0.85,
-            "reason": "Customer left active cart; send cart recovery reminder email.",
-            "requires_human_approval": requires_human_approval
-        }
-
-    elif case_type == "FAILED_SUBSCRIPTION":
-        return {
-            "root_cause": "Recurring subscription billing failure",
-            "recommended_action": "UPDATE_PAYMENT_METHOD" if failure_reason == "EXPIRED_CARD" else "RETRY_PAYMENT",
-            "confidence": 0.88,
-            "reason": "Subscription renewal payment failed; retry billing or request card update.",
-            "requires_human_approval": requires_human_approval
-        }
-
-    elif case_type == "OVERDUE_INVOICE":
-        if days_overdue > 60:
-            return {
-                "root_cause": f"Invoice overdue by {days_overdue} days",
-                "recommended_action": "ESCALATE",
-                "confidence": 0.92,
-                "reason": f"Invoice severely overdue ({days_overdue} days); escalating to finance/collections team.",
-                "requires_human_approval": True
-            }
-        else:
-            return {
-                "root_cause": f"Invoice overdue by {days_overdue} days",
-                "recommended_action": "SEND_REMINDER",
-                "confidence": 0.87,
-                "reason": f"Invoice overdue by {days_overdue} days; send payment reminder notice.",
-                "requires_human_approval": requires_human_approval
-            }
+        action = "SEND_REMINDER"
+        root_cause = "Checkout abandoned at payment step"
+    else:
+        action = "ESCALATE"
+        root_cause = f"Unknown failure reason ('{failure_reason}') - escalated for human review"
 
     return {
-        "root_cause": "Generic revenue risk detected",
-        "recommended_action": "SEND_REMINDER",
-        "confidence": 0.75,
-        "reason": "Standard recovery process initiated.",
-        "requires_human_approval": requires_human_approval
+        "root_cause": root_cause,
+        "recommended_action": action,
+        "confidence": 0.5,
+        "reason": f"Rule-based fallback triggered for failure_reason='{failure_reason}' (AI models unavailable).",
+        "requires_human_approval": True,
+        "decision_source": "FALLBACK_RULE"
+    }
+
+def _call_openrouter_model(case: dict, model_name: str) -> Dict[str, Any]:
+    """
+    Helper to execute an OpenRouter model call and parse the single tool call (tool_calls[0]).
+    """
+    case_id = case.get("case_id", "UNKNOWN")
+    client = OpenRouter(api_key=OPENROUTER_API_KEY)
+    user_content = f"Classify this at-risk recovery case: {json.dumps(case)}"
+
+    completion = client.chat.send(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content}
+        ],
+        tools=[CLASSIFY_CASE_TOOL],
+        tool_choice={"type": "function", "function": {"name": "classify_recovery_case"}}
+    )
+
+    tool_calls = completion.choices[0].message.tool_calls
+    if not tool_calls:
+        raise ValueError(f"OpenRouter model '{model_name}' response did not contain expected tool_calls payload")
+
+    if len(tool_calls) > 1:
+        logger.warning(
+            f"[MULTIPLE TOOL CALLS WARNING] Model '{model_name}' returned {len(tool_calls)} tool calls for Case #{case_id}. Using tool_calls[0]."
+        )
+
+    args = json.loads(tool_calls[0].function.arguments)
+    return {
+        "root_cause": str(args.get("root_cause", "")),
+        "recommended_action": str(args.get("recommended_action", "SEND_REMINDER")),
+        "confidence": float(args.get("confidence", 0.8)),
+        "reason": str(args.get("reason", "")),
+        "requires_human_approval": bool(args.get("requires_human_approval", False))
     }
 
 def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
-    Classifies an at-risk case using OpenRouter client (openrouter/free) with tool calling.
-    If force_fallback is True, uses deterministic fallback classifier directly.
+    Tiered 3-Level Classification Flow:
+    1. Tier 1 (AI_PRIMARY): Tries primary model (OPENROUTER_MODEL). Retries once with backoff on error.
+    2. Tier 2 (AI_SECONDARY): Tries secondary model (OPENROUTER_FALLBACK_MODEL) if Tier 1 fails.
+    3. Tier 3 (FALLBACK_RULE): Deterministic rule table if both AI models fail.
+    Guaranteed NEVER to raise an unhandled exception to the caller.
     """
-    if force_fallback:
-        logger.info("[FALLBACK PATH] Explicit force_fallback=True requested; using fallback classifier.")
-        return _fallback_classify_case(case)
-
-    if not _is_api_key_valid():
-        msg = "[CRITICAL ERROR] OPENROUTER_API_KEY is missing or invalid! Live API call required."
-        logger.error(msg)
-        print(f"\n[ERROR] {msg}\n")
-        raise ValueError(msg)
-
-    if OpenRouter is None:
-        msg = "[CRITICAL ERROR] openrouter SDK package is not imported!"
-        logger.error(msg)
-        print(f"\n[ERROR] {msg}\n")
-        raise RuntimeError(msg)
-
     case_id = case.get("case_id", "UNKNOWN")
-    logger.info(f"[AI CLASSIFY START] Processing Case #{case_id} using model '{MODEL_NAME}'")
-    print(f"\n======================================================================")
-    print(f" [OPENROUTER LLM REQUEST]")
-    print(f" Model: {MODEL_NAME}")
-    print(f" Case Payload: {json.dumps(case)}")
-    print(f"======================================================================")
 
     try:
-        client = OpenRouter(api_key=OPENROUTER_API_KEY)
-        user_content = f"Classify this at-risk recovery case: {json.dumps(case)}"
+        if force_fallback:
+            logger.warning(f"[AI CLASSIFY FALLBACK WARNING] Explicit force_fallback=True requested for Case #{case_id}; executing Tier 3 Fallback Rule table.")
+            return _rule_table_classify(case)
 
-        completion = client.chat.send(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content}
-            ],
-            tools=[CLASSIFY_CASE_TOOL],
-            tool_choice={"type": "function", "function": {"name": "classify_recovery_case"}}
+        # Validate client prerequisites before API calls
+        if not _is_api_key_valid() or OpenRouter is None:
+            logger.warning(f"[AI CLASSIFY FALLBACK WARNING] OpenRouter client unconfigured/invalid for Case #{case_id}; executing Tier 3 Fallback Rule table.")
+            return _rule_table_classify(case)
+
+        # ------------------------------------------------------------------
+        # TIER 1: Primary Model Attempt (AI_PRIMARY)
+        # ------------------------------------------------------------------
+        logger.info(f"[AI CLASSIFY START] Case #{case_id} attempting Tier 1 Primary Model '{MODEL_NAME}'")
+        tier1_error = None
+
+        for attempt in range(2):
+            try:
+                res = _call_openrouter_model(case, MODEL_NAME)
+                res["decision_source"] = "AI_PRIMARY"
+                logger.info(f"[AI CLASSIFY SUCCESS] Case #{case_id} classified via Tier 1 Primary Model '{MODEL_NAME}' (source=AI_PRIMARY)")
+                return res
+            except (TooManyRequestsResponseError, OpenRouterError, Exception) as e:
+                tier1_error = e
+                if attempt == 0:
+                    logger.warning(f"[AI CLASSIFY RETRY] Case #{case_id} Tier 1 Primary Model attempt 1 failed ({type(e).__name__}: {e}). Retrying after 1.0s backoff...")
+                    import time
+                    time.sleep(1.0)
+
+        # ------------------------------------------------------------------
+        # TIER 2: Secondary Model Attempt (AI_SECONDARY)
+        # ------------------------------------------------------------------
+        logger.warning(
+            f"[AI CLASSIFY FALLBACK WARNING] Case #{case_id} Tier 1 Primary Model '{MODEL_NAME}' failed after retry ({type(tier1_error).__name__}: {tier1_error}). "
+            f"Attempting Tier 2 Secondary Model '{FALLBACK_MODEL_NAME}'..."
         )
 
-        tool_calls = completion.choices[0].message.tool_calls
-        print(f"----------------------------------------------------------------------")
-        print(f" [OPENROUTER RAW RESPONSE]")
-        print(f" Tool Calls: {tool_calls}")
-        print(f"----------------------------------------------------------------------")
+        try:
+            res = _call_openrouter_model(case, FALLBACK_MODEL_NAME)
+            res["decision_source"] = "AI_SECONDARY"
+            logger.warning(f"[AI CLASSIFY FALLBACK SUCCESS] Case #{case_id} classified via Tier 2 Secondary Model '{FALLBACK_MODEL_NAME}' (source=AI_SECONDARY)")
+            return res
+        except (TooManyRequestsResponseError, OpenRouterError, Exception) as tier2_error:
+            # ------------------------------------------------------------------
+            # TIER 3: Deterministic Fallback Rule Table (FALLBACK_RULE)
+            # ------------------------------------------------------------------
+            logger.warning(
+                f"[CRITICAL CLASSIFY FALLBACK WARNING] Both primary ('{MODEL_NAME}') and secondary ('{FALLBACK_MODEL_NAME}') AI models failed for Case #{case_id} "
+                f"(Tier 1 error: {tier1_error}; Tier 2 error: {tier2_error}). Executing Tier 3 Fallback Rule table."
+            )
+            return _rule_table_classify(case)
 
-        if tool_calls:
-            args = json.loads(tool_calls[0].function.arguments)
-            result = {
-                "root_cause": str(args.get("root_cause", "")),
-                "recommended_action": str(args.get("recommended_action", "SEND_REMINDER")),
-                "confidence": float(args.get("confidence", 0.8)),
-                "reason": str(args.get("reason", "")),
-                "requires_human_approval": bool(args.get("requires_human_approval", False))
-            }
-            logger.info(f"[AI CLASSIFY COMPLETE] Case #{case_id} -> root_cause='{result['root_cause']}', recommended_action='{result['recommended_action']}', confidence={result['confidence']}")
-            print(f" [OPENROUTER PARSED RESULT]: {result}\n")
-            return result
-        else:
-            raise ValueError("OpenRouter response did not contain expected tool_calls payload")
-
-    except Exception as e:
-        logger.error(f"[CRITICAL ERROR] OpenRouter API call failed: {e}")
-        print(f"\n[OPENROUTER API CALL FAILED]: {e}\n")
-        raise e
+    except Exception as fatal_err:
+        logger.warning(
+            f"[CRITICAL CLASSIFY UNHANDLED FALLBACK] Unexpected exception in classify_case for Case #{case_id}: {fatal_err}. Executing Tier 3 Fallback Rule table."
+        )
+        return _rule_table_classify(case)
 
 async def classify_case_async(case: dict) -> Dict[str, Any]:
     """
     Asynchronously classifies an at-risk case using OpenRouter client.
     """
+    import asyncio
     return await asyncio.to_thread(classify_case, case)

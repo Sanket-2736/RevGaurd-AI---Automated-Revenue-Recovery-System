@@ -3,6 +3,7 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import health, ingestion, detection, batch, metrics
+from app.utils.path_utils import verify_synthetic_data_on_startup
 
 # Configure root logger format to show timestamp, level, and message clearly
 logging.basicConfig(
@@ -24,6 +25,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def startup_checks():
+    logger.info("[STARTUP] Running synthetic data directory and CSV verification checks...")
+    success, data_dir, csv_status = verify_synthetic_data_on_startup()
+    if not success:
+        logger.error(f"[STARTUP WARNING] Synthetic data resolution incomplete for dir: '{data_dir}' (Status: {csv_status})")
+    else:
+        logger.info(f"[STARTUP READY] Backend initialized successfully with data directory: '{data_dir}'")
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -47,3 +57,5 @@ def read_root():
         "docs": "/docs",
         "health": "/health"
     }
+
+# uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

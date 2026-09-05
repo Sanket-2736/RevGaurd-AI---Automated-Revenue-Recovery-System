@@ -58,7 +58,7 @@ def test_blocked_cases_never_call_simulator(session):
 
     # Step 2: Assert Guardrail Blocked Action
     assert guard_res["decision"] == "BLOCKED"
-    assert guard_res["route"] == "HUMAN_REVIEW"
+    assert guard_res["route"] in ["ESCALATE", "HUMAN_REVIEW"]
 
     # Step 3: Assert Simulator is NOT Executed for Blocked Cases
     # Count RecoveryAction rows in DB

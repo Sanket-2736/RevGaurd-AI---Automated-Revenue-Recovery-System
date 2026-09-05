@@ -1,4 +1,4 @@
-from app.models.enums import CaseType, CaseStatus, GuardrailDecision
+from app.models.enums import CaseType, CaseStatus, GuardrailDecision, DecisionSource
 from app.models.customer import Customer
 from app.models.payment import Payment
 from app.models.checkout import Checkout
@@ -13,6 +13,7 @@ __all__ = [
     "CaseType",
     "CaseStatus",
     "GuardrailDecision",
+    "DecisionSource",
     "Customer",
     "Payment",
     "Checkout",

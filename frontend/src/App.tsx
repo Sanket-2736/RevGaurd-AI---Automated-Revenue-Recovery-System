@@ -22,6 +22,7 @@ import {
   triggerIngest,
   triggerDetection,
   getSSEStreamUrl,
+  getBatchStatus,
 } from './api';
 
 import { MetricsResponse, RecoveryCase, GuardrailEvent, SSEStreamEvent } from './types';
@@ -99,6 +100,43 @@ export default function App() {
     const interval = setInterval(refreshAllData, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // Authoritative Batch Status Polling Effect
+  useEffect(() => {
+    if (!activeBatchId || !isRunningBatch) {
+      return;
+    }
+
+    const pollBatchStatus = async () => {
+      try {
+        const status = await getBatchStatus(activeBatchId);
+        console.log(`[BATCH STATUS POLL] ${activeBatchId}`, status);
+
+        if (typeof status.progress_pct === 'number') {
+          setBatchProgress(status.progress_pct);
+        }
+
+        if (status.is_finished) {
+          console.log(`[BATCH COMPLETED] Batch ${activeBatchId} reported is_finished=true`);
+          setBatchProgress(100);
+          setIsRunningBatch(false);
+
+          if (sseRef.current) {
+            sseRef.current.close();
+            sseRef.current = null;
+          }
+
+          await refreshAllData();
+        }
+      } catch (err) {
+        console.warn(`[BATCH STATUS POLL ERROR] Failed to poll ${activeBatchId}:`, err);
+      }
+    };
+
+    pollBatchStatus();
+    const interval = setInterval(pollBatchStatus, 1000);
+    return () => clearInterval(interval);
+  }, [activeBatchId, isRunningBatch]);
 
   // Guided Tour Launcher using driver.js
   const startGuidedTour = () => {
@@ -196,7 +234,7 @@ export default function App() {
           setActiveBatchId(retryRes.batch_id);
           setTotalEnqueued(retryRes.total_enqueued);
           setBatchMode(retryRes.mode);
-          startSSEStream(retryRes.batch_id);
+          startSSEStream(retryRes.batch_id, retryRes.total_enqueued);
         } else {
           setIsRunningBatch(false);
         }
@@ -207,7 +245,7 @@ export default function App() {
       setTotalEnqueued(res.total_enqueued);
       setBatchMode(res.mode);
 
-      startSSEStream(res.batch_id);
+      startSSEStream(res.batch_id, res.total_enqueued);
     } catch (err) {
       console.error('[App handleRunBatch Error] Error starting batch:', err);
       setIsRunningBatch(false);
@@ -215,7 +253,7 @@ export default function App() {
   };
 
   // SSE Stream handler
-  const startSSEStream = (batchId: string) => {
+  const startSSEStream = (batchId: string, batchTotal: number) => {
     if (sseRef.current) {
       sseRef.current.close();
     }
@@ -224,11 +262,18 @@ export default function App() {
     const es = new EventSource(streamUrl);
     sseRef.current = es;
 
+    es.onopen = () => {
+      console.log('[SSE OPEN]', batchId);
+    };
+
     es.onmessage = (event) => {
+      console.log('[SSE RAW MESSAGE]', event.data);
       try {
         const data: SSEStreamEvent = JSON.parse(event.data);
+        console.log('[SSE PARSED DATA]', data);
 
         if (data.is_finished) {
+          console.log('[SSE FINISHED]', batchId);
           setBatchProgress(100);
           setIsRunningBatch(false);
           refreshAllData();
@@ -238,19 +283,20 @@ export default function App() {
 
         if (data.case_id) {
           setStreamEvents((prev) => [data, ...prev]);
-          setBatchProgress((prev) => Math.min(prev + (100 / (totalEnqueued || 381)), 98));
+          setBatchProgress((prev) =>
+            Math.min(prev + (100 / (batchTotal || 381)), 99.9)
+          );
           refreshAllData();
         }
       } catch (err) {
-        console.error('Error parsing SSE event:', err);
+        console.error('[SSE PARSE ERROR]', err);
       }
     };
 
     es.onerror = (err) => {
-      console.warn('SSE connection closed or ended:', err);
-      setIsRunningBatch(false);
-      refreshAllData();
-      es.close();
+      console.warn('[SSE ERROR]', batchId, err);
+      // EventSource automatically attempts reconnection on transient network issues.
+      // Connection is closed cleanly when data.is_finished is received.
     };
   };
 

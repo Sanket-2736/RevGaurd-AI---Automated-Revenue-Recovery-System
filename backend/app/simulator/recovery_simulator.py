@@ -14,17 +14,7 @@ _GROUND_TRUTH_BY_KEY: Dict[Tuple[str, int], Dict[str, Any]] = {}
 _GROUND_TRUTH_BY_CASE_ID: Dict[int, Dict[str, Any]] = {}
 _IS_LOADED = False
 
-def find_synthetic_data_dir() -> str:
-    possible_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../synthetic-data")),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../synthetic-data")),
-        os.path.abspath("synthetic-data"),
-        os.path.abspath("../synthetic-data"),
-    ]
-    for p in possible_paths:
-        if os.path.isdir(p):
-            return p
-    return os.path.abspath("../synthetic-data")
+from app.utils.path_utils import find_synthetic_data_dir
 
 def _load_ground_truth_map():
     global _IS_LOADED, _GROUND_TRUTH_BY_KEY, _GROUND_TRUTH_BY_CASE_ID

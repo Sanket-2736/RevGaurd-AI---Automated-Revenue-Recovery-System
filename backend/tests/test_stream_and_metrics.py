@@ -1,10 +1,11 @@
 import asyncio
-from sqlmodel import SQLModel, Session, text
+from sqlmodel import SQLModel, Session, text, select
 from app.db import engine
 from app.routers.ingestion import ingest_all_synthetic_data
 from app.services.detection import detect_revenue_at_risk
 from app.routers.batch import run_batch_processing, stream_batch_events
 from app.routers.metrics import get_live_metrics
+from app.tasks import process_case
 
 async def consume_sse_stream(batch_id: str):
     stream_response = stream_batch_events(batch_id)
@@ -56,6 +57,12 @@ def test_stream_and_metrics_endpoints(engine):
         print("Batch Enqueue Result:", batch_res)
         batch_id = batch_res["batch_id"]
         assert batch_id is not None
+
+        # Execute process_case for the enqueued cases to simulate worker execution
+        from app.models import RecoveryCase, CaseStatus
+        test_cases = session.exec(select(RecoveryCase).limit(5)).all()
+        for tc in test_cases:
+            process_case(tc.id, batch_id=batch_id)
 
     # ----------------------------------------------------
     # 3. TEST GET /api/batch/{batch_id}/stream (SSE Stream Generator)

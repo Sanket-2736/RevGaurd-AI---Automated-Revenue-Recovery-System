@@ -13,32 +13,7 @@ logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/api/ingest", tags=["ingestion"])
 
-def find_synthetic_data_dir() -> str:
-    """Finds synthetic-data directory relative to backend or workspace root."""
-    env_dir = os.getenv("SYNTHETIC_DATA_DIR")
-    if env_dir and os.path.isdir(env_dir):
-        return env_dir
-
-    base_file_dir = os.path.dirname(os.path.abspath(__file__))
-    cwd_dir = os.getcwd()
-
-    possible_paths = [
-        os.path.abspath(os.path.join(base_file_dir, "synthetic-data")),
-        os.path.abspath(os.path.join(base_file_dir, "../synthetic-data")),
-        os.path.abspath(os.path.join(base_file_dir, "../../synthetic-data")),
-        os.path.abspath(os.path.join(base_file_dir, "../../../synthetic-data")),
-        os.path.abspath(os.path.join(cwd_dir, "synthetic-data")),
-        os.path.abspath(os.path.join(cwd_dir, "../synthetic-data")),
-        os.path.abspath(os.path.join(cwd_dir, "../../synthetic-data")),
-    ]
-
-    for p in possible_paths:
-        if os.path.isdir(p):
-            logger.info(f"[SYNTHETIC DATA] Found synthetic-data directory at: '{p}'")
-            return p
-
-    logger.error(f"Could not locate synthetic-data directory. Checked paths: {possible_paths}")
-    raise FileNotFoundError(f"Could not locate synthetic-data directory. Checked paths: {possible_paths}")
+from app.utils.path_utils import find_synthetic_data_dir
 
 def parse_iso_datetime(val: Optional[str]) -> Optional[datetime]:
     if not val or not val.strip():
@@ -69,8 +44,10 @@ def ingest_all_synthetic_data(override_data_dir: Optional[str] = None):
         try:
             data_dir = find_synthetic_data_dir()
         except FileNotFoundError as e:
+            logger.error(f"[INGEST HANDLER ERROR] Failed to locate synthetic data: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+    logger.info(f"[INGEST HANDLER EXPLICIT PATH LOG] Resolved synthetic-data directory at request time: '{data_dir}'")
     customers_csv = os.path.join(data_dir, "customers.csv")
     payments_csv = os.path.join(data_dir, "payments.csv")
     checkouts_csv = os.path.join(data_dir, "checkouts.csv")

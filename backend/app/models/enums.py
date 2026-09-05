@@ -16,3 +16,8 @@ class CaseStatus(str, Enum):
 class GuardrailDecision(str, Enum):
     APPROVED = "APPROVED"
     BLOCKED = "BLOCKED"
+
+class DecisionSource(str, Enum):
+    AI_PRIMARY = "AI_PRIMARY"
+    AI_SECONDARY = "AI_SECONDARY"
+    FALLBACK_RULE = "FALLBACK_RULE"
