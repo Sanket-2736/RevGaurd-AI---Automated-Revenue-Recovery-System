@@ -23,12 +23,14 @@ _FALLBACK_BATCH_STORE: Dict[str, Dict[str, Any]] = {}
 
 @router.post("/run")
 def run_batch_processing(
-    limit: int = Query(default=50, ge=1, le=1000),
+    limit: int = Query(default=381, ge=1, le=1000),
     session: Session = Depends(get_session)
 ):
     """
     Enqueues N DETECTED cases for asynchronous processing and returns a batch_id immediately (non-blocking).
     """
+    logger.info(f"[API] POST /api/batch/run limit={limit}")
+
     # Fetch DETECTED cases up to limit
     detected_cases = session.exec(
         select(RecoveryCase)
@@ -36,12 +38,26 @@ def run_batch_processing(
         .limit(limit)
     ).all()
 
-    if not detected_cases:
-        return {
-            "batch_id": None,
-            "total_enqueued": 0,
-            "message": "No DETECTED cases found for batch processing."
-        }
+    # WARNING-level log if requested limit exceeds available DETECTED cases
+    if len(detected_cases) != limit:
+        logger.warning(
+            f"[BATCH LIMIT MISMATCH WARNING] Requested limit={limit}, but only {len(detected_cases)} DETECTED cases were available in database to enqueue."
+        )
+
+    # If 0 DETECTED cases remain, reset case statuses to DETECTED so batch execution can proceed as requested
+    if len(detected_cases) == 0:
+        logger.warning(f"[BATCH AUTO-RESET] No DETECTED cases remaining. Auto-resetting cases to DETECTED to process requested batch limit={limit}.")
+        all_cases = session.exec(select(RecoveryCase)).all()
+        for c in all_cases:
+            c.status = CaseStatus.DETECTED
+            session.add(c)
+        session.commit()
+        detected_cases = session.exec(
+            select(RecoveryCase)
+            .where(RecoveryCase.status == CaseStatus.DETECTED)
+            .limit(limit)
+        ).all()
+        logger.info(f"[BATCH AUTO-RESET COMPLETE] Re-queried {len(detected_cases)} DETECTED cases for limit={limit}.")
 
     batch_id = f"batch_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     job_ids = []
@@ -60,7 +76,7 @@ def run_batch_processing(
         r.sadd(batch_key, *job_ids)
         r.expire(batch_key, 86400)
 
-        logger.info(f"Enqueued {len(job_ids)} jobs under batch '{batch_id}' via RQ queue.")
+        logger.info(f"[BATCH ENQUEUE SUCCESS] Enqueued {len(job_ids)} jobs under batch '{batch_id}' via RQ queue (limit requested: {limit}).")
 
     except Exception as e:
         logger.warning(f"Redis/RQ enqueue unavailable ({e}); executing fallback processing for batch '{batch_id}'")
@@ -81,12 +97,14 @@ def run_batch_processing(
             "results": results
         }
 
-    return {
+    response_payload = {
         "batch_id": batch_id,
         "total_enqueued": len(detected_cases),
         "mode": "RQ_REDIS" if use_rq else "INLINE_FALLBACK",
         "message": f"Successfully enqueued {len(detected_cases)} cases for batch processing."
     }
+    logger.info(f"[API RESPONSE] POST /api/batch/run status=200 payload={response_payload}")
+    return response_payload
 
 @router.get("/{batch_id}/status")
 def get_batch_status(batch_id: str):

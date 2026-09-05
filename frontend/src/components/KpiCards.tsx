@@ -57,7 +57,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ metrics, loading }) => {
             {loading ? '...' : <AnimatedCounter value={recovered} />}
           </div>
           <div className="mt-2 flex items-center justify-between text-xs lg:text-sm text-emerald-300/90 font-medium">
-            <span>Overall Recovery Rate</span>
+            <span>Recovery Rate (All-Time)</span>
             <span className="font-bold text-emerald-300 font-mono text-base">{rate}%</span>
           </div>
         </div>

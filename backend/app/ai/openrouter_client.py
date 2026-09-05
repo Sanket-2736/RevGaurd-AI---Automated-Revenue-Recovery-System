@@ -21,7 +21,7 @@ except ImportError:
     OpenRouter = None
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-MODEL_NAME = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+MODEL_NAME = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
 CLASSIFY_CASE_TOOL = {
     "type": "function",
@@ -163,7 +163,7 @@ def _fallback_classify_case(case: dict) -> Dict[str, Any]:
 
 def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
     """
-    Classifies an at-risk case using OpenRouter client (openai/gpt-4o-mini) with tool calling.
+    Classifies an at-risk case using OpenRouter client (openrouter/free) with tool calling.
     If force_fallback is True, uses deterministic fallback classifier directly.
     """
     if force_fallback:
@@ -182,6 +182,8 @@ def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
         print(f"\n[ERROR] {msg}\n")
         raise RuntimeError(msg)
 
+    case_id = case.get("case_id", "UNKNOWN")
+    logger.info(f"[AI CLASSIFY START] Processing Case #{case_id} using model '{MODEL_NAME}'")
     print(f"\n======================================================================")
     print(f" [OPENROUTER LLM REQUEST]")
     print(f" Model: {MODEL_NAME}")
@@ -217,6 +219,7 @@ def classify_case(case: dict, force_fallback: bool = False) -> Dict[str, Any]:
                 "reason": str(args.get("reason", "")),
                 "requires_human_approval": bool(args.get("requires_human_approval", False))
             }
+            logger.info(f"[AI CLASSIFY COMPLETE] Case #{case_id} -> root_cause='{result['root_cause']}', recommended_action='{result['recommended_action']}', confidence={result['confidence']}")
             print(f" [OPENROUTER PARSED RESULT]: {result}\n")
             return result
         else:

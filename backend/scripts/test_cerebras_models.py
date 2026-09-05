@@ -7,7 +7,7 @@ from openrouter import OpenRouter
 api_key = os.getenv("OPENROUTER_API_KEY", "")
 print("OPENROUTER_API_KEY present:", bool(api_key))
 
-models_to_test = ["openai/gpt-4o-mini", "anthropic/claude-3.5-haiku", "meta-llama/llama-3.3-70b-instruct"]
+models_to_test = ["openrouter/free", "anthropic/claude-3.5-haiku", "meta-llama/llama-3.3-70b-instruct"]
 
 client = OpenRouter(api_key=api_key)
 

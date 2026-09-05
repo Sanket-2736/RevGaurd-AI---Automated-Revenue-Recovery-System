@@ -15,16 +15,30 @@ router = APIRouter(prefix="/api/ingest", tags=["ingestion"])
 
 def find_synthetic_data_dir() -> str:
     """Finds synthetic-data directory relative to backend or workspace root."""
+    env_dir = os.getenv("SYNTHETIC_DATA_DIR")
+    if env_dir and os.path.isdir(env_dir):
+        return env_dir
+
+    base_file_dir = os.path.dirname(os.path.abspath(__file__))
+    cwd_dir = os.getcwd()
+
     possible_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../synthetic-data")),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "../../synthetic-data")),
-        os.path.abspath("synthetic-data"),
-        os.path.abspath("../synthetic-data"),
+        os.path.abspath(os.path.join(base_file_dir, "synthetic-data")),
+        os.path.abspath(os.path.join(base_file_dir, "../synthetic-data")),
+        os.path.abspath(os.path.join(base_file_dir, "../../synthetic-data")),
+        os.path.abspath(os.path.join(base_file_dir, "../../../synthetic-data")),
+        os.path.abspath(os.path.join(cwd_dir, "synthetic-data")),
+        os.path.abspath(os.path.join(cwd_dir, "../synthetic-data")),
+        os.path.abspath(os.path.join(cwd_dir, "../../synthetic-data")),
     ]
+
     for p in possible_paths:
         if os.path.isdir(p):
+            logger.info(f"[SYNTHETIC DATA] Found synthetic-data directory at: '{p}'")
             return p
-    raise FileNotFoundError("Could not locate synthetic-data directory")
+
+    logger.error(f"Could not locate synthetic-data directory. Checked paths: {possible_paths}")
+    raise FileNotFoundError(f"Could not locate synthetic-data directory. Checked paths: {possible_paths}")
 
 def parse_iso_datetime(val: Optional[str]) -> Optional[datetime]:
     if not val or not val.strip():
@@ -48,13 +62,14 @@ def ingest_all_synthetic_data(override_data_dir: Optional[str] = None):
     Bulk ingests (Upserts) customers, payments, checkouts, subscriptions, and invoices
     from CSV files in a single atomic database transaction. Idempotent across multiple runs.
     """
+    logger.info(f"[API] POST /api/ingest/all override_data_dir={override_data_dir}")
     if override_data_dir and os.path.isdir(override_data_dir):
         data_dir = override_data_dir
     else:
         try:
             data_dir = find_synthetic_data_dir()
         except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
     customers_csv = os.path.join(data_dir, "customers.csv")
     payments_csv = os.path.join(data_dir, "payments.csv")
@@ -362,4 +377,5 @@ def ingest_all_synthetic_data(override_data_dir: Optional[str] = None):
             logger.error(f"Ingestion failed and transaction rolled back: {e}")
             raise HTTPException(status_code=500, detail=f"Ingestion transaction failed: {str(e)}")
 
+    logger.info(f"[API RESPONSE] POST /api/ingest/all status=200 counts={counts}")
     return counts

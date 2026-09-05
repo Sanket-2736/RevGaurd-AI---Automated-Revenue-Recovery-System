@@ -58,7 +58,9 @@ def process_case(case_id: int, batch_id: Optional[str] = None) -> Dict[str, Any]
     classify_case -> validate_action -> execute_recovery_action (if APPROVED).
     Publishes SSE JSON event payload to Redis Pub/Sub.
     """
-    logger.info(f"Worker task starting processing for Case #{case_id} (batch_id={batch_id})")
+    import time
+    start_time = time.time()
+    logger.info(f"[WORKER START] Processing Case #{case_id} for batch_id='{batch_id}'")
 
     with Session(engine) as session:
         case = session.get(RecoveryCase, case_id)
@@ -164,4 +166,6 @@ def process_case(case_id: int, batch_id: Optional[str] = None) -> Dict[str, Any]
                 logger.debug(f"Redis Pub/Sub event publish skipped ({e})")
 
         res_payload["sse_event"] = sse_event
+        elapsed = time.time() - start_time
+        logger.info(f"[WORKER FINISH] Completed Case #{case_id} for batch_id='{batch_id}' in {elapsed:.2f}s (result={res_payload.get('status')})")
         return res_payload

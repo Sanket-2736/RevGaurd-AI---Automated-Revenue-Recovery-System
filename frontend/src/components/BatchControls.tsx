@@ -21,11 +21,13 @@ export const BatchControls: React.FC<BatchControlsProps> = ({
   const [limit, setLimit] = useState<number>(381);
 
   const handleStart = () => {
-    onRunBatch(limit);
+    const selectedLimit = Number(limit);
+    console.log(`[UI BatchControls] "⚡ Run Recovery Batch" clicked. Dropdown state limit value read: ${selectedLimit} (type: ${typeof selectedLimit})`);
+    onRunBatch(selectedLimit);
   };
 
   return (
-    <div id="tour-batch-controls" className="glass-panel rounded-2xl p-5 mb-6 border border-indigo-500/20 bg-gradient-to-r from-gray-900/90 via-gray-900/60 to-indigo-950/30">
+    <div id="tour-batch-controls" className="glass-panel rounded-2xl p-6 lg:p-7 border border-indigo-500/20 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-indigo-950/30 shadow-xl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         
         {/* Left: Control Instructions */}

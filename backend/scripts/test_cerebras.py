@@ -51,7 +51,7 @@ def run_test():
         }
     ]
 
-    print("=== TESTING OPENROUTER CASE CLASSIFICATION ENGINE (openai/gpt-4o-mini) ===\n")
+    print("=== TESTING OPENROUTER CASE CLASSIFICATION ENGINE (openrouter/free) ===\n")
 
     for idx, case in enumerate(sample_cases, start=1):
         print(f"--- Case #{idx}: {case['case_type']} (${case['amount_at_risk']:,.2f}) ---")

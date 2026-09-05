@@ -43,7 +43,7 @@ services:
       - "8000:8000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:
@@ -63,7 +63,7 @@ services:
     command: rq worker recovery_queue --url redis://redis:6379/0
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-your_openrouter_api_key_here}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o-mini}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openrouter/free}
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/revenue_recovery}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:

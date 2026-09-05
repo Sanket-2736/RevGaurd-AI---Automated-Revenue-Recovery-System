@@ -157,17 +157,42 @@ def get_guardrail_events(
 @router.post("/reset")
 def reset_demo_state(session: Session = Depends(get_session)):
     """
-    Resets demo state by re-ingesting synthetic datasets and re-running detection.
+    Resets demo state by clearing old actions/events, restoring RecoveryCase statuses to DETECTED,
+    re-ingesting synthetic datasets, and re-running detection.
     """
+    logger.info("[API] POST /api/reset")
     from app.routers.ingestion import ingest_all_synthetic_data
     from app.services.detection import detect_revenue_at_risk
+
+    # 1. Reset existing RecoveryCases to DETECTED and clear root causes / actions
+    cases = session.exec(select(RecoveryCase)).all()
+    for c in cases:
+        c.status = CaseStatus.DETECTED
+        c.root_cause = None
+        c.recommended_action = None
+        c.ai_confidence = None
+        session.add(c)
+
+    # 2. Clear old GuardrailEvent & RecoveryAction entries
+    events = session.exec(select(GuardrailEvent)).all()
+    for e in events:
+        session.delete(e)
+
+    actions = session.exec(select(RecoveryAction)).all()
+    for a in actions:
+        session.delete(a)
+
+    session.commit()
 
     ingest_res = ingest_all_synthetic_data()
     detect_res = detect_revenue_at_risk(session)
 
-    return {
+    res = {
         "status": "success",
+        "cases_reset": len(cases),
         "ingested": ingest_res,
         "detection": detect_res
     }
+    logger.info(f"[API RESPONSE] POST /api/reset status=200 payload={res}")
+    return res
 

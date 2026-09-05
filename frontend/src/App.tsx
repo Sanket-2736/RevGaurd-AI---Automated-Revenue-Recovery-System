@@ -179,15 +179,19 @@ export default function App() {
   // Handle batch run trigger
   const handleRunBatch = async (limit: number) => {
     try {
+      console.log(`[App handleRunBatch] Initiating batch run with limit=${limit}`);
       setIsRunningBatch(true);
       setBatchProgress(0);
       setStreamEvents([]);
 
       const res = await runBatch(limit);
+      console.log(`[App handleRunBatch] Response from backend: batch_id=${res.batch_id}, total_enqueued=${res.total_enqueued}, mode=${res.mode}`);
 
-      if (!res.batch_id) {
+      if (!res.batch_id || res.total_enqueued === 0) {
+        console.warn(`[App handleRunBatch] 0 cases enqueued for batch; triggering demo state reset and retrying limit=${limit}...`);
         await resetDemoState();
         const retryRes = await runBatch(limit);
+        console.log(`[App handleRunBatch Retry] Response: batch_id=${retryRes.batch_id}, total_enqueued=${retryRes.total_enqueued}`);
         if (retryRes.batch_id) {
           setActiveBatchId(retryRes.batch_id);
           setTotalEnqueued(retryRes.total_enqueued);
@@ -205,7 +209,7 @@ export default function App() {
 
       startSSEStream(res.batch_id);
     } catch (err) {
-      console.error('Error starting batch:', err);
+      console.error('[App handleRunBatch Error] Error starting batch:', err);
       setIsRunningBatch(false);
     }
   };
